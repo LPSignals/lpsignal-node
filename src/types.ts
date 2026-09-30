@@ -174,6 +174,8 @@ interface SignalBase {
   tickUpper: number;
   /** only opportunities are scored; null until 7 days have passed (and always null for other kinds) */
   outcome: SignalOutcome | null;
+  /** set when one of your custom rules produced this signal (private to you, never scored); null otherwise */
+  rule: { id: string; name: string } | null;
 }
 
 /** An opportunity: the recommended position is `tickLower..tickUpper`. */
@@ -282,6 +284,65 @@ export interface Me {
   /** the wallet the account signs in with on lpsignal.app (null for API-key-only accounts) */
   walletAddress: string | null;
   hasApiKey: boolean;
+  /** receive the global opportunity signals on Telegram / webhook / WebSocket (risk alerts always arrive) */
+  defaultSignals: boolean;
+}
+
+/** Custom alert rules (Basic: 3, Pro: 20). Thresholds are fractions: 0.15 = 15%. */
+export type RuleKind = 'net_apr' | 'depeg' | 'tvl_outflow';
+interface RuleCommon {
+  /** 1..60 characters */
+  name: string;
+  /** default true */
+  enabled?: boolean;
+  /** only these chains; empty/omitted = all */
+  chains?: Chain[];
+  /** only these pool types; empty/omitted = all (depeg: stable and correlated only) */
+  pairClasses?: PairClass[];
+  /** only these pools, "<chain>:<address>" (up to 50); empty/omitted = all */
+  pools?: string[];
+  /** ≥ 100,000; default 1,000,000 */
+  minTvlUsd?: number;
+  /** quiet period per pool after the rule fires, 24..720; default 24 */
+  cooldownHours?: number;
+}
+export interface NetAprRuleInput extends RuleCommon {
+  kind: 'net_apr';
+  minNet7d: number;
+  /** default = minNet7d */
+  minNet24h?: number;
+  /** default 0.8 */
+  minInRange7d?: number;
+}
+export interface DepegRuleInput extends RuleCommon {
+  kind: 'depeg';
+  /** 0.001..0.5 */
+  minDeviation: number;
+}
+export interface TvlOutflowRuleInput extends RuleCommon {
+  kind: 'tvl_outflow';
+  /** 0.05..0.95 */
+  minDrop: number;
+  /** 1..24, default 3 */
+  windowHours?: number;
+}
+export type RuleInput = NetAprRuleInput | DepegRuleInput | TvlOutflowRuleInput;
+/** A stored rule: every default filled in. */
+export type Rule = Required<RuleInput> & {
+  id: string;
+  /** enabled and within the plan's rule limit: it runs every hour */
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export interface RulesPage {
+  rules: Rule[];
+  /** rules this plan may have (0 on the free plan) */
+  limit: number;
+  /** matches per account per 24 hours */
+  dailyCap: number;
+  matchesToday: number;
+  defaultSignals: boolean;
 }
 
 /** Track record of opportunity signals with a known 7-day outcome, over the last `days`. */

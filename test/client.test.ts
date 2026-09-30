@@ -91,6 +91,23 @@ describe('LPSignal client', () => {
     expect(calls[2]!.body).toBe('{"replace":false}');
   });
 
+  it('custom rules: list, create, update, delete, default switch; source filter', async () => {
+    const { f, calls } = fakeFetch((c) => (c.method === 'DELETE' ? { status: 204 } : { body: { id: '7' } }));
+    const c = new LPSignal({ apiKey: 'lps_k', baseUrl: 'http://api.test', fetch: f });
+    await c.rules();
+    await c.createRule({ kind: 'net_apr', name: 'wide', minNet7d: 0.15, chains: ['base'] });
+    await c.updateRule('7', { kind: 'depeg', name: 'peg', minDeviation: 0.003, enabled: false });
+    await c.deleteRule('7');
+    await c.setDefaultSignals(false);
+    await c.signals({ source: 'rules', limit: 5 });
+    expect(calls.map((x) => `${x.method} ${x.url.pathname}${x.url.search}`)).toEqual([
+      'GET /v1/me/rules', 'POST /v1/me/rules', 'PUT /v1/me/rules/7', 'DELETE /v1/me/rules/7', 'PUT /v1/me/default-signals', 'GET /v1/signals?source=rules&limit=5',
+    ]);
+    expect(JSON.parse(calls[1]!.body!)).toEqual({ kind: 'net_apr', name: 'wide', minNet7d: 0.15, chains: ['base'] });
+    expect(JSON.parse(calls[2]!.body!)).toEqual({ kind: 'depeg', name: 'peg', minDeviation: 0.003, enabled: false });
+    expect(calls[4]!.body).toBe('{"enabled":false}');
+  });
+
   it('crypto billing: overview, order, status, cancel', async () => {
     const { f, calls } = fakeFetch(() => ({ body: { id: '9', status: 'pending' } }));
     const c = new LPSignal({ apiKey: 'lps_k', baseUrl: 'http://api.test', fetch: f });

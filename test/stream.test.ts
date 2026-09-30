@@ -25,9 +25,10 @@ const sig = (id: number) => ({ id: String(id), kind: 'depeg', firedAt: '2026-09-
 
 /** a REST API whose signal table is `ids` (newest first on the wire) */
 function api(ids: number[]) {
-  const table = { ids };
+  const table = { ids, sources: [] as (string | null)[] };
   const f = (async (input: URL | string) => {
     const u = new URL(String(input));
+    table.sources.push(u.searchParams.get('source'));
     const limit = Number(u.searchParams.get('limit') ?? 50);
     const before = u.searchParams.get('before');
     const rows = [...table.ids].sort((a, b) => b - a).filter((i) => !before || i < Number(before)).slice(0, limit).map(sig);
@@ -80,6 +81,15 @@ describe('SignalStream', () => {
     expect(h.events).toContainEqual({ type: 'anchored', lastId: '3' });
     expect(h.events).toContainEqual({ type: 'live' });
     expect(h.stream.position).toBe('5');
+    await h.stream.stop();
+  });
+
+  it('REST anchor and catch-up ask for exactly what the socket delivers (source=subscribed)', async () => {
+    const h = harness({ ids: [1, 2, 3] });
+    await h.stream.start();
+    await until(() => h.sockets.length === 1);
+    expect(h.table.sources.length).toBeGreaterThan(1);
+    expect(h.table.sources.every((x) => x === 'subscribed')).toBe(true);
     await h.stream.stop();
   });
 

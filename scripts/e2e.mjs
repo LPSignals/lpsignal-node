@@ -5,7 +5,7 @@
  *   LPSIGNAL_BASE_URL=https://api.lpsignal.app [LPSIGNAL_API_KEY=lps_...] npm run e2e
  *
  * Optional:
- *   E2E_WRITE=1               also exercise write endpoints (webhook, Telegram link, follows) — test/PPE accounts only
+ *   E2E_WRITE=1               also exercise write endpoints (webhook, Telegram link, follows, rules) — test/PPE accounts only
  *   E2E_EXPECT_SIGNAL_SEC=60  wait this long for one live signal on the stream (something must fire meanwhile)
  *   LPSIGNAL_FREE_API_KEY=... a free-plan key: the stream must refuse it
  * Needs `npm run build` first (it imports ../dist).
@@ -181,6 +181,35 @@ if (authed && WRITE) {
   await check('write: telegram link code', async () => {
     const t = await authed.telegramLink();
     expect(typeof t.code === 'string' && t.code.length >= 12, 'no code');
+  });
+  await check('write: custom rule create / update / delete, default switch (paid)', async () => {
+    const me = await authed.me();
+    if (!me.paid) return 'skip';
+    const page = await authed.rules();
+    if (page.rules.length >= page.limit) return 'skip';
+    const r = await authed.createRule({ kind: 'net_apr', name: 'sdk e2e', minNet7d: 0.15, chains: ['base'] });
+    try {
+      expect(r.minNet24h === 0.15 && r.cooldownHours === 24 && r.active === true, `create ${JSON.stringify(r)}`);
+      const u = await authed.updateRule(r.id, { kind: 'depeg', name: 'sdk e2e peg', minDeviation: 0.003, enabled: false });
+      expect(u.kind === 'depeg' && u.active === false, 'update');
+    } finally {
+      // never leave a test rule behind (it would use up the plan's slots on the next run)
+      await authed.deleteRule(r.id).catch((e) => { if (!(e instanceof LPSignalError && e.status === 404)) throw new Error(`cleanup: rule ${r.id} not deleted: ${e}`); });
+    }
+    expect(!(await authed.rules()).rules.some((x) => x.id === r.id), 'still listed');
+    const e = await authed.createRule({ kind: 'net_apr', name: 'x', minNet7d: 0.1, minTvlUsd: 10 }).catch((x) => x);
+    // a regression that accepts it must not leave the rule behind either
+    if (!(e instanceof Error)) await authed.deleteRule(e.id).catch(() => undefined);
+    expect(e instanceof LPSignalError && e.status === 400, 'TVL floor not enforced');
+    try {
+      expect((await authed.setDefaultSignals(!me.defaultSignals)).defaultSignals === !me.defaultSignals, 'toggle');
+    } finally {
+      // restore even when the toggle's response was lost or wrong
+      await authed.setDefaultSignals(me.defaultSignals);
+    }
+    expect((await authed.me()).defaultSignals === me.defaultSignals, 'default switch not restored');
+    const mine = await authed.signals({ source: 'rules', limit: 20 });
+    expect(mine.signals.every((s) => s.rule !== null), 'source=rules returned a global signal');
   });
   await check('write: follow / unfollow (Pro)', async () => {
     const me = await authed.me();

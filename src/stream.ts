@@ -214,7 +214,7 @@ export class SignalStream {
   private async catchUp(): Promise<void> {
     if (this.lastId === null) {
       // nothing is consumed until the starting point is saved: a restart must resume from this same point
-      this.anchor ??= (await this.opts.client.signals({ limit: 1 })).signals[0]?.id ?? '0';
+      this.anchor ??= (await this.opts.client.signals({ limit: 1, source: 'subscribed' })).signals[0]?.id ?? '0';
       await this.store.save(this.anchor);
       this.lastId = this.anchor;
       this.emit({ type: 'anchored', lastId: this.lastId });
@@ -223,7 +223,8 @@ export class SignalStream {
     // whatever was created meanwhile must come from REST too, or the socket would skip it
     let delivered = 0;
     for (;;) {
-      const batch = await this.opts.client.signalsAfter(this.lastId);
+      // exactly what the socket would deliver (your rule matches; global opportunities only while the defaults are on)
+      const batch = await this.opts.client.signalsAfter(this.lastId, { source: 'subscribed' });
       if (!batch.length || !this.running) break;
       for (const s of batch) {
         if (!this.running) return;

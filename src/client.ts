@@ -1,6 +1,6 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
-  PoolsPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
+  PoolsPage, Rule, RuleInput, RulesPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
 } from './types.js';
 
 export const DEFAULT_BASE_URL = 'https://api.lpsignal.app';
@@ -52,6 +52,11 @@ export interface SignalsQuery {
   limit?: number;
   /** only signals with a smaller id (the `next` of the previous page) */
   before?: string;
+  /**
+   * default = global signals only; rules = your custom-rule matches only; subscribed = exactly what your push
+   * channels deliver (global opportunities only while the default signals are on). Omitted = global + your matches.
+   */
+  source?: 'default' | 'rules' | 'subscribed';
 }
 
 const enc = encodeURIComponent;
@@ -160,10 +165,10 @@ export class LPSignal {
    * Every signal visible to this key with an id greater than `afterId`, oldest first. This is how a consumer that was
    * offline catches up (the stream itself only replays the last 24 hours).
    */
-  async signalsAfter(afterId: string): Promise<Signal[]> {
+  async signalsAfter(afterId: string, opts: Pick<SignalsQuery, 'source' | 'kind'> = {}): Promise<Signal[]> {
     const after = BigInt(afterId);
     const newer: Signal[] = [];
-    for await (const s of this.iterateSignals()) {
+    for await (const s of this.iterateSignals(opts)) {
       if (BigInt(s.id) <= after) break;
       newer.push(s);
     }
@@ -194,6 +199,25 @@ export class LPSignal {
   // ── account ──────────────────────────────────────────────────────────────
   me(): Promise<Me> {
     return this.request('GET', '/v1/me');
+  }
+  /** Your custom alert rules, the plan's limit and today's match count. */
+  rules(): Promise<RulesPage> {
+    return this.request('GET', '/v1/me/rules');
+  }
+  /** Create a rule (paid plans; 403 `paid_plan_required`, 400 `rule_limit` when the plan's limit is reached). */
+  createRule(rule: RuleInput): Promise<Rule> {
+    return this.request('POST', '/v1/me/rules', { body: rule });
+  }
+  /** Replace a rule (its kind may change too). */
+  updateRule(id: string, rule: RuleInput): Promise<Rule> {
+    return this.request('PUT', `/v1/me/rules/${enc(id)}`, { body: rule });
+  }
+  async deleteRule(id: string): Promise<void> {
+    await this.request('DELETE', `/v1/me/rules/${enc(id)}`);
+  }
+  /** Receive the global opportunity signals on the push channels (Telegram, webhook, WebSocket), or not. */
+  setDefaultSignals(enabled: boolean): Promise<{ defaultSignals: boolean }> {
+    return this.request('PUT', '/v1/me/default-signals', { body: { enabled } });
   }
   /** Set or replace the webhook. The signing secret is returned only here. */
   setWebhook(url: string): Promise<WebhookRegistration> {
