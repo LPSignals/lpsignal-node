@@ -41,6 +41,7 @@ try {
 | `me()` · `setWebhook(url)` · `deleteWebhook()` · `telegramLink()` | `/v1/me…` | yes |
 | `createApiKey({ replace })` | `POST /v1/me/api-key` — replaces the key (or `replace: false`: only if none), returned once | yes |
 | `billing({ refresh })` · `checkout(tier)` · `billingPortal()` | `/v1/billing…` | yes |
+| `cryptoBilling()` · `createCryptoOrder(tier, months)` · `cryptoOrder(id)` · `cancelCryptoOrder(id)` | `/v1/billing/crypto…` — prepaid USDT/USDC plans | yes |
 
 Errors are `LPSignalError` with `status`, `code` (the API's `error` field), `body` and `requestId`. A `429` on a
 GET, PUT or DELETE is retried after its `Retry-After` (`maxRetries`, default 2).

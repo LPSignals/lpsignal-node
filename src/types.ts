@@ -323,3 +323,46 @@ export interface WebhookEvent {
   deliveryId: string;
   signal: Signal;
 }
+
+export type CryptoMonths = 1 | 3 | 12;
+
+/** One prepaid plan period bought with a USDT/USDC deposit (GET/POST /v1/billing/crypto/orders…). */
+export interface CryptoOrder {
+  id: string;
+  tier: 'basic' | 'pro';
+  months: CryptoMonths;
+  listCents: number;
+  /** upgrade credit from unused crypto Basic time, taken off the price */
+  creditCents: number;
+  /** what to pay, in cents */
+  cents: number;
+  /** credit the price could not absorb, as extra Pro days */
+  bonusDays: number;
+  /** the EXACT amount to send (6 decimals): its last digits identify the order */
+  amount: string;
+  address: string;
+  networks: string[];
+  coins: string[];
+  status: 'pending' | 'paid' | 'expired' | 'cancelled';
+  createdAt: string;
+  /** send before this; never send for a cancelled or expired order */
+  expiresAt: string;
+  /** a payment sent in time still counts if it is credited before this (or later, if Binance held it) */
+  graceUntil: string;
+  paidTx: string | null;
+  paidToken: string | null;
+  /** the plan end this payment granted */
+  grantedUntil: string | null;
+}
+
+/** GET /v1/billing/crypto */
+export interface CryptoBilling {
+  available: boolean;
+  coins: string[];
+  networks: string[];
+  blockedBy: 'stripe_subscription_active' | null;
+  basicUntil: string | null;
+  proUntil: string | null;
+  quotes: { tier: 'basic' | 'pro'; months: CryptoMonths; listCents: number | null; creditCents: number; cents: number | null; bonusDays: number; unavailable: string | null }[];
+  order: CryptoOrder | null;
+}

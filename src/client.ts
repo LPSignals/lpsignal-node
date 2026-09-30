@@ -1,6 +1,6 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
-  PoolsPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, WalletPositions, WebhookRegistration, WindowHours,
+  PoolsPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
 } from './types.js';
 
 export const DEFAULT_BASE_URL = 'https://api.lpsignal.app';
@@ -223,6 +223,21 @@ export class LPSignal {
   /** A Stripe Checkout URL for a monthly plan. */
   checkout(tier: 'basic' | 'pro'): Promise<{ url: string }> {
     return this.request('POST', '/v1/billing/checkout', { body: { tier } });
+  }
+  /** Prepaid USDT/USDC plans: prices for this account (upgrade credit applied), networks, and the open order. */
+  cryptoBilling(): Promise<CryptoBilling> {
+    return this.request('GET', '/v1/billing/crypto');
+  }
+  /** Start (or get back the open) crypto order; send exactly `amount` before `expiresAt`. */
+  createCryptoOrder(tier: 'basic' | 'pro', months: CryptoMonths): Promise<CryptoOrder> {
+    return this.request('POST', '/v1/billing/crypto/orders', { body: { tier, months } });
+  }
+  cryptoOrder(id: string): Promise<CryptoOrder> {
+    return this.request('GET', `/v1/billing/crypto/orders/${enc(id)}`);
+  }
+  /** Withdraw an open order (a payment already sent before its deadline still pays it). */
+  cancelCryptoOrder(id: string): Promise<CryptoOrder> {
+    return this.request('POST', `/v1/billing/crypto/orders/${enc(id)}/cancel`);
   }
   /** A Stripe Customer Portal URL (change plan, cancel, invoices). */
   billingPortal(): Promise<{ url: string }> {
