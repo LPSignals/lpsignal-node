@@ -12,9 +12,9 @@
 /** Chains scanned today. The API may add more, so any string is accepted. */
 export type Chain = 'ethereum' | 'bsc' | 'base' | 'arbitrum' | 'optimism' | 'polygon' | (string & {});
 export type PairClass = 'stable' | 'correlated' | 'volatile';
-export type WindowHours = 24 | 168 | 720;
+export type WindowHours = 3 | 24 | 168 | 720;
 export type Tier = 'free' | 'basic' | 'pro';
-export type SignalKind = 'net_apr' | 'tvl_outflow' | 'depeg' | 'smart_lp';
+export type SignalKind = 'net_apr' | 'burst' | 'tvl_outflow' | 'depeg' | 'smart_lp';
 
 export interface Health { ok: boolean }
 
@@ -192,6 +192,24 @@ export interface NetAprSignal extends SignalBase {
   stakedEmissionApr?: number;
 }
 
+/**
+ * A short-term opportunity: a very high net APR over the last `windowHours` (3) that is still earning in the latest
+ * hour. Noisier than `net_apr`; scored on the 24 hours after it fires. Pushed only to accounts subscribed to `burst`.
+ */
+export interface BurstSignal extends SignalBase {
+  kind: 'burst';
+  tvlUsd: number;
+  windowHours: number;
+  net3h: number;
+  fee3h: number;
+  il3h: number;
+  inRange3h: number;
+  /** context, exact values only (null when not exact) */
+  net24h: number | null;
+  net7d: number | null;
+  stakedEmissionApr?: number;
+}
+
 /** Liquidity fell by `drop` within `windowHours`, valued at current prices. */
 export interface TvlOutflowSignal extends SignalBase {
   kind: 'tvl_outflow';
@@ -221,7 +239,7 @@ export interface SmartLpSignal extends SignalBase {
   wallet30d: { positions: number; pnlUsd: number; returnPct: number } | null;
 }
 
-export type Signal = NetAprSignal | TvlOutflowSignal | DepegSignal | SmartLpSignal;
+export type Signal = NetAprSignal | BurstSignal | TvlOutflowSignal | DepegSignal | SmartLpSignal;
 
 export interface SignalsPage {
   signals: Signal[];
@@ -284,8 +302,11 @@ export interface Me {
   /** the wallet the account signs in with on lpsignal.app (null for API-key-only accounts) */
   walletAddress: string | null;
   hasApiKey: boolean;
-  /** receive the global opportunity signals on Telegram / webhook / WebSocket (risk alerts always arrive) */
-  defaultSignals: boolean;
+  /**
+   * kinds of global signal pushed to this account (Telegram, webhook, WebSocket without `kinds`): the core events
+   * net_apr, tvl_outflow, depeg, smart_lp by default; burst only when added. Custom-rule matches always arrive.
+   */
+  subscriptions: SignalKind[];
 }
 
 /** Custom alert rules (Basic: 3, Pro: 20). Thresholds are fractions: 0.15 = 15%. */
@@ -342,12 +363,13 @@ export interface RulesPage {
   /** matches per account per 24 hours */
   dailyCap: number;
   matchesToday: number;
-  defaultSignals: boolean;
 }
 
-/** Track record of opportunity signals with a known 7-day outcome, over the last `days`. */
+/** Track record of one opportunity kind (signals with a known outcome) over the last `days`. */
 export interface SignalStats {
   days: number;
+  /** net_apr (scored on the 7 days after firing) or burst (the 24 hours after) */
+  kind: 'net_apr' | 'burst';
   /** exact outcomes (the only ones in the numbers below) */
   scored: number;
   /** evaluated without exact fees: never counted as a result */

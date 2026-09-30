@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import WebSocket, { type ClientOptions } from 'ws';
 import { LPSignalError, type LPSignal } from './client.js';
-import type { Signal } from './types.js';
+import type { Signal, SignalKind } from './types.js';
 
 /**
  * Where the stream is: the id of the last signal handled. Persist it to resume after a restart.
@@ -89,6 +89,8 @@ export interface SignalStreamOptions {
   store?: LastIdStore;
   /** start after this signal id when the store is empty (default: after the newest signal at start) */
   since?: string;
+  /** only these kinds on this stream (default: the kinds your account subscribes to, plus your rule matches) */
+  kinds?: SignalKind[];
   pingIntervalMs?: number;
   /** give up on a connection that has not opened after this long, default 15 s */
   openTimeoutMs?: number;
@@ -210,11 +212,15 @@ export class SignalStream {
     }
   }
 
+  private kindsQuery(): { kinds?: SignalKind[] } {
+    return this.opts.kinds?.length ? { kinds: this.opts.kinds } : {};
+  }
+
   /** Establish a position (first run) or fetch everything after it over REST. */
   private async catchUp(): Promise<void> {
     if (this.lastId === null) {
       // nothing is consumed until the starting point is saved: a restart must resume from this same point
-      this.anchor ??= (await this.opts.client.signals({ limit: 1, source: 'subscribed' })).signals[0]?.id ?? '0';
+      this.anchor ??= (await this.opts.client.signals({ limit: 1, source: 'subscribed', ...this.kindsQuery() })).signals[0]?.id ?? '0';
       await this.store.save(this.anchor);
       this.lastId = this.anchor;
       this.emit({ type: 'anchored', lastId: this.lastId });
@@ -224,7 +230,7 @@ export class SignalStream {
     let delivered = 0;
     for (;;) {
       // exactly what the socket would deliver (your rule matches; global opportunities only while the defaults are on)
-      const batch = await this.opts.client.signalsAfter(this.lastId, { source: 'subscribed' });
+      const batch = await this.opts.client.signalsAfter(this.lastId, { source: 'subscribed', ...this.kindsQuery() });
       if (!batch.length || !this.running) break;
       for (const s of batch) {
         if (!this.running) return;
@@ -237,7 +243,7 @@ export class SignalStream {
   /** One connection's life. Resolves when it closes; true when it went live. */
   private connectOnce(): Promise<boolean> {
     return new Promise((resolve) => {
-      const url = `${this.opts.client.streamUrl}?since=${this.lastId}`;
+      const url = `${this.opts.client.streamUrl}?since=${this.lastId}${this.opts.kinds?.length ? `&kinds=${this.opts.kinds.join(',')}` : ''}`;
       this.emit({ type: 'connecting', url });
       let ws: SocketLike;
       try {

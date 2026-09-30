@@ -182,7 +182,7 @@ if (authed && WRITE) {
     const t = await authed.telegramLink();
     expect(typeof t.code === 'string' && t.code.length >= 12, 'no code');
   });
-  await check('write: custom rule create / update / delete, default switch (paid)', async () => {
+  await check('write: custom rule create / update / delete, subscriptions (paid)', async () => {
     const me = await authed.me();
     if (!me.paid) return 'skip';
     const page = await authed.rules();
@@ -201,13 +201,17 @@ if (authed && WRITE) {
     // a regression that accepts it must not leave the rule behind either
     if (!(e instanceof Error)) await authed.deleteRule(e.id).catch(() => undefined);
     expect(e instanceof LPSignalError && e.status === 400, 'TVL floor not enforced');
+    const before = me.subscriptions;
     try {
-      expect((await authed.setDefaultSignals(!me.defaultSignals)).defaultSignals === !me.defaultSignals, 'toggle');
+      const set = await authed.setSubscriptions(['depeg', 'burst']);
+      expect(JSON.stringify(set.subscriptions) === '["burst","depeg"]', `set ${JSON.stringify(set)}`);
     } finally {
-      // restore even when the toggle's response was lost or wrong
-      await authed.setDefaultSignals(me.defaultSignals);
+      // restore even when the response was lost or wrong
+      await authed.setSubscriptions(before);
     }
-    expect((await authed.me()).defaultSignals === me.defaultSignals, 'default switch not restored');
+    expect(JSON.stringify((await authed.me()).subscriptions) === JSON.stringify(before), 'subscriptions not restored');
+    const st = await authed.signalStats({ kind: 'burst' });
+    expect(st.kind === 'burst', 'burst stats');
     const mine = await authed.signals({ source: 'rules', limit: 20 });
     expect(mine.signals.every((s) => s.rule !== null), 'source=rules returned a global signal');
   });

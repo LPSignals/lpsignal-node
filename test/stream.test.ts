@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FileLastIdStore, LPSignal, MemoryLastIdStore, SignalStream, type Signal, type SignalMeta, type SocketLike, type StreamEvent } from '../src/index.js';
+import { FileLastIdStore, LPSignal, MemoryLastIdStore, SignalStream, type Signal, type SignalKind, type SignalMeta, type SocketLike, type StreamEvent } from '../src/index.js';
 
 class FakeSocket extends EventEmitter {
   closed: number | null = null;
@@ -25,10 +25,11 @@ const sig = (id: number) => ({ id: String(id), kind: 'depeg', firedAt: '2026-09-
 
 /** a REST API whose signal table is `ids` (newest first on the wire) */
 function api(ids: number[]) {
-  const table = { ids, sources: [] as (string | null)[] };
+  const table = { ids, sources: [] as (string | null)[], kinds: [] as (string | null)[] };
   const f = (async (input: URL | string) => {
     const u = new URL(String(input));
     table.sources.push(u.searchParams.get('source'));
+    table.kinds.push(u.searchParams.get('kinds'));
     const limit = Number(u.searchParams.get('limit') ?? 50);
     const before = u.searchParams.get('before');
     const rows = [...table.ids].sort((a, b) => b - a).filter((i) => !before || i < Number(before)).slice(0, limit).map(sig);
@@ -45,7 +46,7 @@ async function until(cond: () => boolean, ms = 2000) {
   }
 }
 
-function harness(opts: { ids: number[]; store?: MemoryLastIdStore; since?: string; onSignal?: (s: Signal, m: SignalMeta) => void | Promise<void> }) {
+function harness(opts: { ids: number[]; store?: MemoryLastIdStore; since?: string; kinds?: SignalKind[]; onSignal?: (s: Signal, m: SignalMeta) => void | Promise<void> }) {
   const { client, table } = api(opts.ids);
   const sockets: FakeSocket[] = [];
   const got: [string, string][] = [];
@@ -54,6 +55,7 @@ function harness(opts: { ids: number[]; store?: MemoryLastIdStore; since?: strin
     client,
     store: opts.store ?? new MemoryLastIdStore(),
     ...(opts.since ? { since: opts.since } : {}),
+    ...(opts.kinds ? { kinds: opts.kinds } : {}),
     minBackoffMs: 5,
     maxBackoffMs: 20,
     onSignal: async (s, m) => { await opts.onSignal?.(s, m); got.push([s.id, m.source]); },
@@ -90,6 +92,15 @@ describe('SignalStream', () => {
     await until(() => h.sockets.length === 1);
     expect(h.table.sources.length).toBeGreaterThan(1);
     expect(h.table.sources.every((x) => x === 'subscribed')).toBe(true);
+    await h.stream.stop();
+  });
+
+  it('kinds: the socket and the REST catch-up ask for the same kinds', async () => {
+    const h = harness({ ids: [1, 2, 3], kinds: ['burst', 'depeg'] });
+    await h.stream.start();
+    await until(() => h.sockets.length === 1);
+    expect(h.sockets[0]!.url).toBe('ws://api.test/v1/stream?since=3&kinds=burst,depeg');
+    expect(h.table.kinds.every((k) => k === 'burst,depeg')).toBe(true);
     await h.stream.stop();
   });
 

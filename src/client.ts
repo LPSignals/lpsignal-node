@@ -57,6 +57,8 @@ export interface SignalsQuery {
    * channels deliver (global opportunities only while the default signals are on). Omitted = global + your matches.
    */
   source?: 'default' | 'rules' | 'subscribed';
+  /** several kinds at once (sent as kinds=a,b) */
+  kinds?: SignalKind[];
 }
 
 const enc = encodeURIComponent;
@@ -142,10 +144,11 @@ export class LPSignal {
   // ── signals ──────────────────────────────────────────────────────────────
   /** One page of signals, newest first. Without a paid key, opportunities appear once they are 24h old. */
   signals(query: SignalsQuery = {}): Promise<SignalsPage> {
-    return this.request('GET', '/v1/signals', { query: { ...query } });
+    const { kinds, ...rest } = query;
+    return this.request('GET', '/v1/signals', { query: { ...rest, ...(kinds?.length ? { kinds: kinds.join(',') } : {}) } });
   }
   /** The public track record over the last `days` (7..365, default 30). */
-  signalStats(opts: { days?: number } = {}): Promise<SignalStats> {
+  signalStats(opts: { days?: number; kind?: 'net_apr' | 'burst' } = {}): Promise<SignalStats> {
     return this.request('GET', '/v1/signals/stats', { query: opts });
   }
   signal(id: string): Promise<Signal> {
@@ -165,7 +168,7 @@ export class LPSignal {
    * Every signal visible to this key with an id greater than `afterId`, oldest first. This is how a consumer that was
    * offline catches up (the stream itself only replays the last 24 hours).
    */
-  async signalsAfter(afterId: string, opts: Pick<SignalsQuery, 'source' | 'kind'> = {}): Promise<Signal[]> {
+  async signalsAfter(afterId: string, opts: Pick<SignalsQuery, 'source' | 'kind' | 'kinds'> = {}): Promise<Signal[]> {
     const after = BigInt(afterId);
     const newer: Signal[] = [];
     for await (const s of this.iterateSignals(opts)) {
@@ -215,9 +218,12 @@ export class LPSignal {
   async deleteRule(id: string): Promise<void> {
     await this.request('DELETE', `/v1/me/rules/${enc(id)}`);
   }
-  /** Receive the global opportunity signals on the push channels (Telegram, webhook, WebSocket), or not. */
-  setDefaultSignals(enabled: boolean): Promise<{ defaultSignals: boolean }> {
-    return this.request('PUT', '/v1/me/default-signals', { body: { enabled } });
+  /**
+   * The kinds of global signal pushed to you on Telegram, webhook and WebSocket (core events by default; add 'burst'
+   * for short-term opportunities). Custom-rule matches always arrive.
+   */
+  setSubscriptions(kinds: SignalKind[]): Promise<{ subscriptions: SignalKind[] }> {
+    return this.request('PUT', '/v1/me/subscriptions', { body: { kinds } });
   }
   /** Set or replace the webhook. The signing secret is returned only here. */
   setWebhook(url: string): Promise<WebhookRegistration> {
