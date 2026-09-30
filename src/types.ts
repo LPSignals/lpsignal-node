@@ -12,7 +12,7 @@
 /** Chains scanned today. The API may add more, so any string is accepted. */
 export type Chain = 'ethereum' | 'bsc' | 'base' | 'arbitrum' | 'optimism' | 'polygon' | (string & {});
 export type PairClass = 'stable' | 'correlated' | 'volatile';
-export type WindowHours = 3 | 24 | 168 | 720;
+export type WindowHours = 1 | 24 | 168 | 720;
 export type Tier = 'free' | 'basic' | 'pro';
 export type SignalKind = 'net_apr' | 'burst' | 'tvl_outflow' | 'depeg' | 'smart_lp';
 
@@ -193,17 +193,19 @@ export interface NetAprSignal extends SignalBase {
 }
 
 /**
- * A short-term opportunity: a very high net APR over the last `windowHours` (3) that is still earning in the latest
- * hour. Noisier than `net_apr`; scored on the 24 hours after it fires. Pushed only to accounts subscribed to `burst`.
+ * A short-term opportunity: a very high net APR over the last `windowHours` (1) on real trading (`swaps` in the window).
+ * Noisier than `net_apr`; scored on the 24 hours after it fires. Pushed only to accounts subscribed to `burst`.
+ * The figures are for the window, whatever its length.
  */
 export interface BurstSignal extends SignalBase {
   kind: 'burst';
   tvlUsd: number;
   windowHours: number;
-  net3h: number;
-  fee3h: number;
-  il3h: number;
-  inRange3h: number;
+  swaps: number;
+  netApr: number;
+  feeApr: number;
+  ilApr: number;
+  inRangeRatio: number;
   /** context, exact values only (null when not exact) */
   net24h: number | null;
   net7d: number | null;
