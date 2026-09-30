@@ -1,6 +1,6 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
-  PoolsPage, Signal, SignalKind, SignalsPage, TelegramLink, WalletPositions, WebhookRegistration, WindowHours,
+  PoolsPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, WalletPositions, WebhookRegistration, WindowHours,
 } from './types.js';
 
 export const DEFAULT_BASE_URL = 'https://api.lpsignal.app';
@@ -139,6 +139,10 @@ export class LPSignal {
   signals(query: SignalsQuery = {}): Promise<SignalsPage> {
     return this.request('GET', '/v1/signals', { query: { ...query } });
   }
+  /** The public track record over the last `days` (7..365, default 30). */
+  signalStats(opts: { days?: number } = {}): Promise<SignalStats> {
+    return this.request('GET', '/v1/signals/stats', { query: opts });
+  }
   signal(id: string): Promise<Signal> {
     return this.request('GET', `/v1/signals/${enc(id)}`);
   }
@@ -197,6 +201,10 @@ export class LPSignal {
   }
   async deleteWebhook(): Promise<void> {
     await this.request('DELETE', '/v1/me/webhook');
+  }
+  /** Create a new API key for this account and return it (shown only here). The key used for this call stops working. */
+  createApiKey(): Promise<{ apiKey: string }> {
+    return this.request('POST', '/v1/me/api-key');
   }
   /** A one-time code: send `/start <code>` to the LPSignal Telegram bot. */
   telegramLink(): Promise<TelegramLink> {

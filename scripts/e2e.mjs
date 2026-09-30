@@ -98,6 +98,11 @@ await check('signals: page, by id, paging, signalsAfter', async () => {
   const kinds = new Set(page.signals.map((s) => s.kind));
   return `newest #${newest[0].id}, kinds ${[...kinds].join('/')}`;
 });
+await check('signal stats (public track record)', async () => {
+  const st = await anon.signalStats({ days: 30 });
+  expect(typeof st.scored === 'number' && st.positive <= st.scored && Array.isArray(st.points), 'bad shape');
+  return `${st.scored} scored, ${st.inexact} inexact`;
+});
 await check('smart LP leaderboard', async () => {
   const lb = await reader.smartLps({ windowDays: 30 });
   expect(Array.isArray(lb.wallets) && typeof lb.full === 'boolean', 'bad shape');

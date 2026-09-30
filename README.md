@@ -32,12 +32,14 @@ try {
 | `pool(chain, address)` · `poolHours(chain, address, { hours })` | `GET /v1/pools/:chain/:address[/hours]` | – |
 | `backtest(chain, address, { rangePct, days })` | `GET …/backtest` | – |
 | `signals({ kind, limit, before })` · `signal(id)` | `GET /v1/signals[/:id]` | optional |
+| `signalStats({ days })` | `GET /v1/signals/stats` — the public track record | – |
 | `iterateSignals({ kind })` | every page, newest first | optional |
 | `signalsAfter(id)` | everything newer than `id`, oldest first | optional |
 | `smartLps({ windowDays, chain, limit })` | `GET /v1/smart-lps` | optional |
 | `walletPositions(owner)` | `GET /v1/smart-lps/:owner/positions` | Pro |
 | `follows()` · `follow(owner)` · `unfollow(owner)` | `/v1/me/follows` | Pro |
 | `me()` · `setWebhook(url)` · `deleteWebhook()` · `telegramLink()` | `/v1/me…` | yes |
+| `createApiKey()` | `POST /v1/me/api-key` — replaces the key, returned once | yes |
 | `billing({ refresh })` · `checkout(tier)` · `billingPortal()` | `/v1/billing…` | yes |
 
 Errors are `LPSignalError` with `status`, `code` (the API's `error` field), `body` and `requestId`. A `429` on a

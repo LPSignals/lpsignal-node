@@ -279,6 +279,24 @@ export interface Me {
   paid: boolean;
   telegramLinked: boolean;
   webhookUrl: string | null;
+  /** the wallet the account signs in with on lpsignal.app (null for API-key-only accounts) */
+  walletAddress: string | null;
+  hasApiKey: boolean;
+}
+
+/** Track record of opportunity signals with a known 7-day outcome, over the last `days`. */
+export interface SignalStats {
+  days: number;
+  /** exact outcomes (the only ones in the numbers below) */
+  scored: number;
+  /** evaluated without exact fees: never counted as a result */
+  inexact: number;
+  positive: number;
+  medianRealizedNetApr: number | null;
+  medianSignalNetApr: number | null;
+  worst: { id: string; pair: string; chain: Chain; netApr: number } | null;
+  /** at-signal vs realized net APR of the most recent (up to 500) scored signals */
+  points: { id: string; signalNetApr: number; realizedNetApr: number }[];
 }
 
 export interface WebhookRegistration {

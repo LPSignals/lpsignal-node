@@ -78,6 +78,16 @@ describe('LPSignal client', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('signal stats and API key creation', async () => {
+    const { f, calls } = fakeFetch((c) => ({ body: c.url.pathname.endsWith('/stats') ? { days: 90, scored: 3 } : { apiKey: 'lps_new' } }));
+    const c = new LPSignal({ apiKey: 'lps_k', baseUrl: 'http://api.test', fetch: f });
+    expect(await c.signalStats({ days: 90 })).toMatchObject({ scored: 3 });
+    expect(await c.createApiKey()).toEqual({ apiKey: 'lps_new' });
+    expect(calls[0]!.url.toString()).toBe('http://api.test/v1/signals/stats?days=90');
+    expect(calls[1]!).toMatchObject({ method: 'POST' });
+    expect(calls[1]!.url.pathname).toBe('/v1/me/api-key');
+  });
+
   it('billing refresh and checkout bodies', async () => {
     const { f, calls } = fakeFetch(() => ({ body: { url: 'https://checkout' } }));
     const c = new LPSignal({ apiKey: 'lps_k', baseUrl: 'http://api.test', fetch: f });
