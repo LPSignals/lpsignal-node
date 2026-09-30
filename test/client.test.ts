@@ -86,6 +86,9 @@ describe('LPSignal client', () => {
     expect(calls[0]!.url.toString()).toBe('http://api.test/v1/signals/stats?days=90');
     expect(calls[1]!).toMatchObject({ method: 'POST' });
     expect(calls[1]!.url.pathname).toBe('/v1/me/api-key');
+    expect(calls[1]!.body).toBeUndefined();
+    await c.createApiKey({ replace: false });
+    expect(calls[2]!.body).toBe('{"replace":false}');
   });
 
   it('billing refresh and checkout bodies', async () => {

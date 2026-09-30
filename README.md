@@ -39,7 +39,7 @@ try {
 | `walletPositions(owner)` | `GET /v1/smart-lps/:owner/positions` | Pro |
 | `follows()` · `follow(owner)` · `unfollow(owner)` | `/v1/me/follows` | Pro |
 | `me()` · `setWebhook(url)` · `deleteWebhook()` · `telegramLink()` | `/v1/me…` | yes |
-| `createApiKey()` | `POST /v1/me/api-key` — replaces the key, returned once | yes |
+| `createApiKey({ replace })` | `POST /v1/me/api-key` — replaces the key (or `replace: false`: only if none), returned once | yes |
 | `billing({ refresh })` · `checkout(tier)` · `billingPortal()` | `/v1/billing…` | yes |
 
 Errors are `LPSignalError` with `status`, `code` (the API's `error` field), `body` and `requestId`. A `429` on a

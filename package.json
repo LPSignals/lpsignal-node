@@ -1,6 +1,6 @@
 {
   "name": "lpsignal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official LPSignal SDK: net-of-IL APR signals for concentrated-liquidity pools, a WebSocket stream that never misses a signal, webhook verification and the REST API.",
   "type": "module",
   "main": "./dist/index.js",

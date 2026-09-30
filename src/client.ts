@@ -202,9 +202,13 @@ export class LPSignal {
   async deleteWebhook(): Promise<void> {
     await this.request('DELETE', '/v1/me/webhook');
   }
-  /** Create a new API key for this account and return it (shown only here). The key used for this call stops working. */
-  createApiKey(): Promise<{ apiKey: string }> {
-    return this.request('POST', '/v1/me/api-key');
+  /**
+   * Create a new API key for this account and return it (shown only here). By default it replaces the current key,
+   * which stops working at once; `{ replace: false }` only creates one when the account has none (else 409
+   * `api_key_exists`).
+   */
+  createApiKey(opts: { replace?: boolean } = {}): Promise<{ apiKey: string }> {
+    return this.request('POST', '/v1/me/api-key', opts.replace === undefined ? {} : { body: { replace: opts.replace } });
   }
   /** A one-time code: send `/start <code>` to the LPSignal Telegram bot. */
   telegramLink(): Promise<TelegramLink> {
