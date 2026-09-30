@@ -1,0 +1,55 @@
+{
+  "name": "lpsignal",
+  "version": "0.1.0",
+  "description": "Official LPSignal SDK: net-of-IL APR signals for concentrated-liquidity pools, a WebSocket stream that never misses a signal, webhook verification and the REST API.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "keywords": [
+    "lpsignal",
+    "defi",
+    "uniswap",
+    "concentrated-liquidity",
+    "liquidity-provider",
+    "impermanent-loss",
+    "apr",
+    "pancakeswap",
+    "aerodrome"
+  ],
+  "homepage": "https://github.com/Ligengxin96/lpsignal-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ligengxin96/lpsignal-sdk.git",
+    "directory": "node"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0"
+  }
+}
