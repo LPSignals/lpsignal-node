@@ -64,6 +64,8 @@ export interface RankedPool {
 export type Order = 'asc' | 'desc';
 /** what `pools` can sort by: the best range's figures, the pool's TVL or fee tier */
 export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee';
+/** what `signals` can sort by: time (newest first, cursor), return (APR at firing), outcome (realised result) */
+export type SignalSort = 'time' | 'return' | 'outcome';
 export interface PoolsPage { pools: RankedPool[]; limit: number; offset: number; total: number; sort: PoolSort; order: Order }
 
 export interface Pool {
@@ -248,8 +250,13 @@ export type Signal = NetAprSignal | BurstSignal | TvlOutflowSignal | DepegSignal
 
 export interface SignalsPage {
   signals: Signal[];
-  /** pass as `before` for the next (older) page; null on the last page */
+  /** pass as `before` for the next (older) page; null on the last page (and always when sorted) */
   next: string | null;
+  /** sorted by return / outcome only */
+  total?: number;
+  offset?: number;
+  sort?: SignalSort;
+  order?: Order;
 }
 
 export interface LeaderboardWallet {

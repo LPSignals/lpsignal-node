@@ -118,6 +118,15 @@ await check('signals: page, by id, paging, signalsAfter', async () => {
   const kinds = new Set(page.signals.map((s) => s.kind));
   return `newest #${newest[0].id}, kinds ${[...kinds].join('/')}`;
 });
+await check('signals sorted by return / outcome (offset pages, total)', async () => {
+  const r = await anon.signals({ sort: 'return', limit: 5 });
+  expect(typeof r.total === 'number' && r.next === null && r.sort === 'return', 'bad page meta');
+  const v = r.signals.map((s) => (s.kind === 'burst' ? s.netApr : s.kind === 'net_apr' ? s.net7d : null)).filter((x) => typeof x === 'number');
+  expect(v.every((x, i) => i === 0 || v[i - 1] >= x), 'return desc not sorted');
+  const bad = await anon.signals({ sort: 'return', before: '5' }).catch((x) => x);
+  expect(bad instanceof LPSignalError && bad.status === 400, 'before with a sort accepted');
+  return `${r.total} signals`;
+});
 await check('signal stats (public track record)', async () => {
   const st = await anon.signalStats({ days: 30 });
   expect(typeof st.scored === 'number' && st.positive <= st.scored && Array.isArray(st.points), 'bad shape');

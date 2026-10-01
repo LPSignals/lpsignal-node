@@ -32,7 +32,7 @@ try {
 | `iteratePools({ …, sort, order })` | every page, in that order (best effort: none twice; one whose place changes meanwhile may be missed) | – |
 | `pool(chain, address)` · `poolHours(chain, address, { hours })` | `GET /v1/pools/:chain/:address[/hours]` | – |
 | `backtest(chain, address, { rangePct, days })` | `GET …/backtest` | – |
-| `signals({ kind, limit, before })` · `signal(id)` | `GET /v1/signals[/:id]` | optional |
+| `signals({ kind, kinds, source, limit, before, sort, order, offset })` · `signal(id)` | `GET /v1/signals[/:id]` — newest first by `before`; or `sort`: `return` (APR at firing) · `outcome` (realised 7-day result), paged by `offset` with `total` | optional |
 | `signalStats({ days })` | `GET /v1/signals/stats` — the public track record | – |
 | `iterateSignals({ kind })` | every page, newest first | optional |
 | `signalsAfter(id)` | everything newer than `id`, oldest first | optional |

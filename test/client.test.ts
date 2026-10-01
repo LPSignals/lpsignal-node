@@ -158,6 +158,17 @@ describe('LPSignal client', () => {
       expect(pager.calls).toHaveLength(2); // 250..151, 150..51 — never the last page
     });
 
+    it('a reused query with a sort, offset or before never changes the cursor walk (complete, newest first)', async () => {
+      pager.calls.length = 0;
+      const q = { sort: 'return', order: 'asc', offset: 30, before: '7', limit: 100 } as const;
+      const ids: string[] = [];
+      for await (const s of c.iterateSignals(q as never)) ids.push(s.id);
+      expect(ids).toHaveLength(250);
+      for (const call of pager.calls) for (const k of ['sort', 'order', 'offset']) expect(call.url.searchParams.has(k)).toBe(false);
+      expect(pager.calls[0]!.url.searchParams.has('before')).toBe(false);
+      expect((await c.signalsAfter('248', q as never)).map((s) => s.id)).toEqual(['249', '250']);
+    });
+
     it('signalsAfter the newest id is empty', async () => {
       expect(await c.signalsAfter('250')).toEqual([]);
     });
@@ -170,10 +181,12 @@ describe('LPSignal client', () => {
       await c.pools({ sort: 'tvl', order: 'asc', limit: 25, offset: 50 });
       await c.smartLps({ windowDays: 90, sort: 'capital', offset: 20 });
       await c.walletPositions('0xabc', { limit: 10, openSort: 'entryUsd', openOrder: 'asc', closedOffset: 10, closedSort: 'pnlUsd' });
+      await c.signals({ sort: 'outcome', order: 'asc', offset: 30, limit: 15, kinds: ['net_apr', 'burst'] });
       expect(calls.map((x) => x.url.pathname + x.url.search)).toEqual([
         '/v1/pools?sort=tvl&order=asc&limit=25&offset=50',
         '/v1/smart-lps?windowDays=90&sort=capital&offset=20',
         '/v1/smart-lps/0xabc/positions?limit=10&openSort=entryUsd&openOrder=asc&closedOffset=10&closedSort=pnlUsd',
+        '/v1/signals?sort=outcome&order=asc&offset=30&limit=15&kinds=net_apr%2Cburst',
       ]);
     });
 

@@ -1,7 +1,7 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
   PoolsPage, Rule, RuleInput, RulesPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
-  BoardSort, ClosedSort, LeaderboardWallet, OpenSort, Order, PoolSort, RankedPool,
+  BoardSort, ClosedSort, LeaderboardWallet, OpenSort, Order, PoolSort, RankedPool, SignalSort,
 } from './types.js';
 
 export const DEFAULT_BASE_URL = 'https://api.lpsignal.app';
@@ -41,6 +41,7 @@ export interface PoolsQuery {
   class?: PairClass;
   /** default 168 (7 days) */
   window?: WindowHours;
+  /** pools under this TVL are left out; default 10000 (0 = every pool: near-empty ones show meaningless APRs) */
   minTvlUsd?: number;
   /** 1..100, default 50 */
   limit?: number;
@@ -92,6 +93,15 @@ export interface SignalsQuery {
   source?: 'default' | 'rules' | 'subscribed';
   /** several kinds at once (sent as kinds=a,b) */
   kinds?: SignalKind[];
+  /**
+   * time (default) = newest first, paged by `before`; return = the APR at firing; outcome = the realised 7-day
+   * result — these two page by `offset` and carry `total` (signals without that figure come last)
+   */
+  sort?: SignalSort;
+  /** return / outcome only: desc (default) or asc */
+  order?: Order;
+  /** return / outcome only */
+  offset?: number;
 }
 
 const enc = encodeURIComponent;
@@ -204,11 +214,15 @@ export class LPSignal {
   signal(id: string): Promise<Signal> {
     return this.request('GET', `/v1/signals/${enc(id)}`);
   }
-  /** Every signal matching `query`, newest first, following the `next` cursor page by page. */
-  async *iterateSignals(query: Omit<SignalsQuery, 'before'> = {}): AsyncGenerator<Signal> {
+  /**
+   * Every signal matching `query`, newest first, following the `next` cursor page by page. Only the filters are used
+   * (a sort, order, offset or before in a reused query object is ignored: this walk is always newest first, complete).
+   */
+  async *iterateSignals(query: Omit<SignalsQuery, 'before' | 'sort' | 'order' | 'offset'> = {}): AsyncGenerator<Signal> {
+    const { kind, kinds, source, limit } = query;
     let before: string | undefined;
     for (;;) {
-      const page = await this.signals({ ...query, limit: query.limit ?? 100, ...(before ? { before } : {}) });
+      const page = await this.signals({ kind, kinds, source, limit: limit ?? 100, ...(before ? { before } : {}) });
       for (const s of page.signals) yield s;
       if (!page.next) return;
       before = page.next;
@@ -221,7 +235,8 @@ export class LPSignal {
   async signalsAfter(afterId: string, opts: Pick<SignalsQuery, 'source' | 'kind' | 'kinds'> = {}): Promise<Signal[]> {
     const after = BigInt(afterId);
     const newer: Signal[] = [];
-    for await (const s of this.iterateSignals(opts)) {
+    // (only the filters: the early stop below relies on the newest-first order)
+    for await (const s of this.iterateSignals({ kind: opts.kind, kinds: opts.kinds, source: opts.source })) {
       if (BigInt(s.id) <= after) break;
       newer.push(s);
     }
