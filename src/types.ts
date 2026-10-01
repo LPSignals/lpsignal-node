@@ -397,7 +397,9 @@ export interface Follow { owner: string; since: string }
 export interface BillingStatus {
   tier: Tier;
   manual: { tier: string; until: string | null };
-  stripe: { tier: string | null; until: string | null; status: string | null; invoiceUnpaidSince: string | null; syncedAt: string | null };
+  /** `until`: when access ends (the period end, or the grace end while a renewal is unpaid); `cancelAtPeriodEnd`: the
+   *  subscription behind `tier`/`until` ends then instead of renewing (auto-renewal off in the billing portal) */
+  stripe: { tier: string | null; until: string | null; status: string | null; cancelAtPeriodEnd: boolean; invoiceUnpaidSince: string | null; syncedAt: string | null };
   onSale: { basic: boolean; pro: boolean };
 }
 
