@@ -44,6 +44,8 @@ export interface BestRange {
   /** Slipstream: gauge emissions if staked instead (fees forgone, not backtested); 0 = not applicable */
   stakedEmissionApr: number;
   asOf: string;
+  /** pools list only: the same range's net APR over the last 24h (null = not computed) */
+  net24h?: number | null;
 }
 
 export interface RankedPool {
@@ -58,12 +60,18 @@ export interface RankedPool {
   /** v4 pools: liquidity within ±2% of price, since v4 has no per-pool balances */
   tvlUsd: number;
   tvlAt: string | null;
+  /**
+   * the last 24h in USD at the latest prices; null = no price yet. fees = an ESTIMATE of the swap fees paid: volume ×
+   * the pool's current fee rate, before protocol cuts (dynamic-fee pools: approximate) — not what LPs were paid
+   */
+  volume24hUsd: number | null;
+  fees24hUsd: number | null;
   best: BestRange;
 }
 
 export type Order = 'asc' | 'desc';
 /** what `pools` can sort by: the best range's figures, the pool's TVL or fee tier */
-export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee';
+export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee' | 'volume24h' | 'fees24h';
 /** what `signals` can sort by: time (newest first, cursor), return (APR at firing), outcome (realised result) */
 export type SignalSort = 'time' | 'return' | 'outcome';
 export interface PoolsPage { pools: RankedPool[]; limit: number; offset: number; total: number; sort: PoolSort; order: Order }
@@ -270,6 +278,12 @@ export interface LeaderboardWallet {
   pnlUsd: number;
   returnPct: number;
   chains: Chain[];
+  /** annualised return vs holding over the capital × time deployed; null = no close with a known opening */
+  aprVsHold: number | null;
+  /** closes with a positive pnl / closes */
+  winRate: number;
+  /** capital-weighted hours a position was held */
+  avgHoldH: number | null;
 }
 
 export interface Leaderboard {
@@ -285,7 +299,7 @@ export interface Leaderboard {
   order: Order;
 }
 /** what `smartLps` can sort by; `rank` (the pnl rank) stays the wallet's rank whatever the sort */
-export type BoardSort = 'rank' | 'pnl' | 'return' | 'capital' | 'closes' | 'wins';
+export type BoardSort = 'rank' | 'pnl' | 'return' | 'capital' | 'closes' | 'wins' | 'apr' | 'winRate';
 
 interface PositionPool { chain: Chain; pool: string; pair: string; dex: string; fee: number }
 
@@ -296,6 +310,8 @@ export interface OpenPosition extends PositionPool {
   openedAt: string | null;
   staked: boolean;
   entryUsd: number | null;
+  /** the pool's tick now (its latest hourly close): in range when tickLower <= poolTick < tickUpper; null = unknown */
+  poolTick: number | null;
 }
 
 export interface ClosedPosition extends PositionPool {

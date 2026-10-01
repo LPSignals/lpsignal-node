@@ -57,6 +57,9 @@ await check('pools: ranked by net APR, bounded', async () => {
 await check('pools: sorted by any column either way, offset pages, total', async () => {
   const win = (await anon.pools({ limit: 1 })).total ? 168 : 24;
   const asc = await anon.pools({ window: win, sort: 'tvl', order: 'asc', limit: 10 });
+  for (const p of asc.pools) expect('volume24hUsd' in p && 'fees24hUsd' in p && 'net24h' in p.best, `24h fields missing on ${p.address}`);
+  const byFees = (await anon.pools({ window: win, sort: 'fees24h', limit: 10 })).pools.map((p) => p.fees24hUsd).filter((v) => v !== null);
+  expect(byFees.every((v, i) => i === 0 || byFees[i - 1] >= v), 'fees24h desc not sorted');
   expect(typeof asc.total === 'number' && asc.sort === 'tvl' && asc.order === 'asc', `bad page meta ${JSON.stringify({ ...asc, pools: undefined })}`);
   const tvls = asc.pools.map((p) => p.tvlUsd);
   expect(tvls.every((v, i) => i === 0 || tvls[i - 1] <= v), 'tvl asc not sorted');
@@ -138,6 +141,7 @@ await check('smart LP leaderboard', async () => {
   expect(lb.full || lb.total <= 10, 'non-Pro sees more than the top 10');
   const ranks = lb.wallets.map((w) => w.rank);
   expect(ranks.every((r, i) => i === 0 || ranks[i - 1] < r), 'default order is not by rank');
+  for (const w of lb.wallets) expect('aprVsHold' in w && typeof w.winRate === 'number' && 'avgHoldH' in w, 'wallet figures missing');
   const byCap = await reader.smartLps({ windowDays: 30, sort: 'capital', limit: 10 });
   const caps = byCap.wallets.map((w) => w.capitalUsd);
   expect(caps.every((v, i) => i === 0 || caps[i - 1] >= v), 'capital desc not sorted');
