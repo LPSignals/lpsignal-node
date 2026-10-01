@@ -43,6 +43,8 @@ export interface PoolsQuery {
   window?: WindowHours;
   /** pools under this TVL are left out; default 10000 (0 = every pool: near-empty ones show meaningless APRs) */
   minTvlUsd?: number;
+  /** only pools whose pool-level 24h APR (`poolApr24h`) is at least this (a fraction: 0.3 = 30%) */
+  minPoolApr?: number;
   /** 1..100, default 50 */
   limit?: number;
   offset?: number;

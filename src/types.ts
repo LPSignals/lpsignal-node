@@ -66,12 +66,14 @@ export interface RankedPool {
    */
   volume24hUsd: number | null;
   fees24hUsd: number | null;
+  /** the pool-level 24h APR DEX sites show (estimated 24h fees / TVL x 365; ignores impermanent loss); null for v4 */
+  poolApr24h: number | null;
   best: BestRange;
 }
 
 export type Order = 'asc' | 'desc';
 /** what `pools` can sort by: the best range's figures, the pool's TVL or fee tier */
-export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee' | 'volume24h' | 'fees24h';
+export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee' | 'volume24h' | 'fees24h' | 'poolApr';
 /** what `signals` can sort by: time (newest first, cursor), return (APR at firing), outcome (realised result) */
 export type SignalSort = 'time' | 'return' | 'outcome';
 export interface PoolsPage { pools: RankedPool[]; limit: number; offset: number; total: number; sort: PoolSort; order: Order }

@@ -182,11 +182,13 @@ describe('LPSignal client', () => {
       await c.smartLps({ windowDays: 90, sort: 'capital', offset: 20 });
       await c.walletPositions('0xabc', { limit: 10, openSort: 'entryUsd', openOrder: 'asc', closedOffset: 10, closedSort: 'pnlUsd' });
       await c.signals({ sort: 'outcome', order: 'asc', offset: 30, limit: 15, kinds: ['net_apr', 'burst'] });
+      await c.pools({ minPoolApr: 0.3, sort: 'poolApr' });
       expect(calls.map((x) => x.url.pathname + x.url.search)).toEqual([
         '/v1/pools?sort=tvl&order=asc&limit=25&offset=50',
         '/v1/smart-lps?windowDays=90&sort=capital&offset=20',
         '/v1/smart-lps/0xabc/positions?limit=10&openSort=entryUsd&openOrder=asc&closedOffset=10&closedSort=pnlUsd',
         '/v1/signals?sort=outcome&order=asc&offset=30&limit=15&kinds=net_apr%2Cburst',
+        '/v1/pools?minPoolApr=0.3&sort=poolApr',
       ]);
     });
 

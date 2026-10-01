@@ -30,7 +30,7 @@ try {
 | Method | Endpoint | Key |
 |---|---|---|
 | `health()` · `chains()` | `/v1/health` · `/v1/chains` | – |
-| `pools({ chain, class, window, minTvlUsd, limit, offset, sort, order })` | `GET /v1/pools` — `sort`: `netApr` (default) · `feeApr` · `ilApr` · `inRange` · `emissionApr` · `tvl` · `fee` · `volume24h` · `fees24h`; `order`: `desc` (default) · `asc`; the page carries `total`; each pool carries `volume24hUsd`, `fees24hUsd` (an estimate: volume × the current fee rate) and `best.net24h` | – |
+| `pools({ chain, class, window, minTvlUsd, limit, offset, sort, order })` | `GET /v1/pools` — `sort`: `netApr` (default) · `feeApr` · `ilApr` · `inRange` · `emissionApr` · `tvl` · `fee` · `volume24h` · `fees24h` · `poolApr`; `minPoolApr` (0.3 = 30%); `order`: `desc` (default) · `asc`; the page carries `total`; each pool carries `volume24hUsd`, `fees24hUsd` (an estimate: volume × the current fee rate) `best.net24h` and `poolApr24h` (pool-level 24h APR, as DEX sites show it) | – |
 | `iteratePools({ …, sort, order })` | every page, in that order (best effort: none twice; one whose place changes meanwhile may be missed) | – |
 | `pool(chain, address)` · `poolHours(chain, address, { hours })` | `GET /v1/pools/:chain/:address[/hours]` | – |
 | `backtest(chain, address, { rangePct, days })` | `GET …/backtest` | – |
