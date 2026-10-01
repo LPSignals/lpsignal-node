@@ -1,6 +1,7 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
   PoolsPage, Rule, RuleInput, RulesPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
+  BoardSort, ClosedSort, LeaderboardWallet, OpenSort, Order, PoolSort, RankedPool,
 } from './types.js';
 
 export const DEFAULT_BASE_URL = 'https://api.lpsignal.app';
@@ -44,6 +45,38 @@ export interface PoolsQuery {
   /** 1..100, default 50 */
   limit?: number;
   offset?: number;
+  /** default netApr */
+  sort?: PoolSort;
+  /** default desc */
+  order?: Order;
+}
+
+export interface SmartLpsQuery {
+  windowDays?: 30 | 90;
+  chain?: Chain;
+  /** 1..100, default 20 */
+  limit?: number;
+  offset?: number;
+  /** default rank (the pnl rank) */
+  sort?: BoardSort;
+  /** default asc for rank, desc otherwise */
+  order?: Order;
+}
+
+/** the open and the closed list page and sort independently; `limit` is shared */
+export interface WalletPositionsQuery {
+  /** 1..100, default 50 */
+  limit?: number;
+  openOffset?: number;
+  /** default lastEvent */
+  openSort?: OpenSort;
+  /** default desc */
+  openOrder?: Order;
+  closedOffset?: number;
+  /** default closedAt */
+  closedSort?: ClosedSort;
+  /** default desc */
+  closedOrder?: Order;
 }
 
 export interface SignalsQuery {
@@ -124,9 +157,26 @@ export class LPSignal {
   }
 
   // ── pools ────────────────────────────────────────────────────────────────
-  /** Active pools ranked by their best range's net APR over `window` hours. */
+  /** Active pools with their best range over `window` hours; by net APR unless `sort` says otherwise. */
   pools(query: PoolsQuery = {}): Promise<PoolsPage> {
     return this.request('GET', '/v1/pools', { query: { ...query } });
+  }
+  /**
+   * The pools matching `query`, in its order, page by page (`limit` = page size, default 100). Best effort: pages are
+   * read one after another, so a pool whose place changes meanwhile (metrics update hourly) may be missed; none is
+   * yielded twice.
+   */
+  async *iteratePools(query: Omit<PoolsQuery, 'offset'> = {}): AsyncGenerator<RankedPool> {
+    const seen = new Set<string>();
+    for (let offset = 0; ; ) {
+      const page = await this.pools({ ...query, limit: query.limit ?? 100, offset });
+      for (const p of page.pools) {
+        const id = `${p.chain}:${p.address}`;
+        if (!seen.has(id)) { seen.add(id); yield p; }
+      }
+      offset += page.pools.length;
+      if (!page.pools.length || offset >= page.total) return;
+    }
   }
   /** One pool with every (window, range) metric. `address` is the pool id for Uniswap v4. */
   pool(chain: Chain, address: string): Promise<PoolDetail> {
@@ -179,13 +229,28 @@ export class LPSignal {
   }
 
   // ── smart LPs ────────────────────────────────────────────────────────────
-  /** Wallets ranked by LP pnl versus holding. Without Pro: the top 10 with masked addresses. */
-  smartLps(query: { windowDays?: 30 | 90; chain?: Chain; limit?: number } = {}): Promise<Leaderboard> {
+  /** Wallets ranked by LP pnl versus holding (sortable; `rank` stays the pnl rank). Without Pro: the top 10, masked. */
+  smartLps(query: SmartLpsQuery = {}): Promise<Leaderboard> {
     return this.request('GET', '/v1/smart-lps', { query: { ...query } });
   }
-  /** A wallet's open and closed positions (Pro). */
-  walletPositions(owner: string, opts: { limit?: number } = {}): Promise<WalletPositions> {
-    return this.request('GET', `/v1/smart-lps/${enc(owner)}/positions`, { query: opts });
+  /**
+   * The wallets on the board, in `query`'s order, page by page (`limit` = page size, default 100). Best effort like
+   * `iteratePools`: a wallet whose place changes meanwhile may be missed; none is yielded twice.
+   */
+  async *iterateSmartLps(query: Omit<SmartLpsQuery, 'offset'> = {}): AsyncGenerator<LeaderboardWallet> {
+    const seen = new Set<string>();
+    for (let offset = 0; ; ) {
+      const page = await this.smartLps({ ...query, limit: query.limit ?? 100, offset });
+      for (const w of page.wallets) {
+        if (!seen.has(w.owner)) { seen.add(w.owner); yield w; }
+      }
+      offset += page.wallets.length;
+      if (!page.wallets.length || offset >= page.total) return;
+    }
+  }
+  /** A wallet's open and closed positions (Pro), each list paged and sorted on its own. */
+  walletPositions(owner: string, opts: WalletPositionsQuery = {}): Promise<WalletPositions> {
+    return this.request('GET', `/v1/smart-lps/${enc(owner)}/positions`, { query: { ...opts } });
   }
   /** Wallets you follow (Pro). */
   async follows(): Promise<Follow[]> {

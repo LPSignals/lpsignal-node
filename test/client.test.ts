@@ -163,6 +163,71 @@ describe('LPSignal client', () => {
     });
   });
 
+  describe('sorted, offset-paged lists', () => {
+    it('pools / smartLps / walletPositions forward the sort, order and offsets', async () => {
+      const { f, calls } = fakeFetch(() => ({ body: {} }));
+      const c = new LPSignal({ baseUrl: 'http://api.test', fetch: f });
+      await c.pools({ sort: 'tvl', order: 'asc', limit: 25, offset: 50 });
+      await c.smartLps({ windowDays: 90, sort: 'capital', offset: 20 });
+      await c.walletPositions('0xabc', { limit: 10, openSort: 'entryUsd', openOrder: 'asc', closedOffset: 10, closedSort: 'pnlUsd' });
+      expect(calls.map((x) => x.url.pathname + x.url.search)).toEqual([
+        '/v1/pools?sort=tvl&order=asc&limit=25&offset=50',
+        '/v1/smart-lps?windowDays=90&sort=capital&offset=20',
+        '/v1/smart-lps/0xabc/positions?limit=10&openSort=entryUsd&openOrder=asc&closedOffset=10&closedSort=pnlUsd',
+      ]);
+    });
+
+    it('iteratePools / iterateSmartLps walk every page by offset until the total, keeping the sort', async () => {
+      const total = 230;
+      const { f, calls } = fakeFetch((c) => {
+        const limit = Number(c.url.searchParams.get('limit')), offset = Number(c.url.searchParams.get('offset'));
+        const ids = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, i) => offset + i);
+        return { body: c.url.pathname === '/v1/pools'
+          ? { pools: ids.map((i) => ({ address: `p${i}` })), total, limit, offset }
+          : { wallets: ids.map((i) => ({ owner: `w${i}`, rank: i + 1 })), total, limit, offset } };
+      });
+      const c = new LPSignal({ baseUrl: 'http://api.test', fetch: f });
+      const pools: string[] = [];
+      for await (const p of c.iteratePools({ sort: 'tvl', order: 'asc' })) pools.push(p.address);
+      expect(pools).toHaveLength(230);
+      expect(pools.at(-1)).toBe('p229');
+      expect(calls.map((x) => x.url.searchParams.get('offset'))).toEqual(['0', '100', '200']);
+      expect(calls.every((x) => x.url.searchParams.get('sort') === 'tvl' && x.url.searchParams.get('order') === 'asc')).toBe(true);
+      calls.length = 0;
+      const wallets: string[] = [];
+      for await (const w of c.iterateSmartLps({ limit: 50, sort: 'pnl' })) wallets.push(w.owner);
+      expect(wallets).toHaveLength(230);
+      expect(calls).toHaveLength(5);
+    });
+
+    it('a reorder between pages never yields one twice (best effort: one that moved may be missed)', async () => {
+      let call = 0;
+      const { f } = fakeFetch((c) => {
+        const order = call++ === 0 ? ['A', 'B', 'C', 'D'] : ['C', 'A', 'B', 'D'];
+        const offset = Number(c.url.searchParams.get('offset'));
+        const rows = order.slice(offset, offset + 2);
+        return { body: c.url.pathname === '/v1/pools'
+          ? { pools: rows.map((a) => ({ chain: 'base', address: a })), total: 4, limit: 2, offset }
+          : { wallets: rows.map((o) => ({ owner: o })), total: 4, limit: 2, offset } };
+      });
+      const c = new LPSignal({ baseUrl: 'http://api.test', fetch: f });
+      const pools: string[] = [];
+      for await (const p of c.iteratePools({ limit: 2 })) pools.push(p.address);
+      expect(pools).toEqual(['A', 'B', 'D']);
+      call = 0;
+      const wallets: string[] = [];
+      for await (const w of c.iterateSmartLps({ limit: 2 })) wallets.push(w.owner);
+      expect(wallets).toEqual(['A', 'B', 'D']);
+    });
+
+    it('an empty page ends the walk even if the total says more (the board changed meanwhile)', async () => {
+      const { f, calls } = fakeFetch(() => ({ body: { pools: [], total: 999, limit: 100, offset: 0 } }));
+      const c = new LPSignal({ baseUrl: 'http://api.test', fetch: f });
+      for await (const _ of c.iteratePools()) { /* none */ }
+      expect(calls).toHaveLength(1);
+    });
+  });
+
   it('derives the stream url', () => {
     expect(new LPSignal({ baseUrl: 'https://api.lpsignal.app' }).streamUrl).toBe('wss://api.lpsignal.app/v1/stream');
     expect(new LPSignal({ baseUrl: 'http://127.0.0.1:8080/' }).streamUrl).toBe('ws://127.0.0.1:8080/v1/stream');

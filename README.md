@@ -28,15 +28,17 @@ try {
 | Method | Endpoint | Key |
 |---|---|---|
 | `health()` · `chains()` | `/v1/health` · `/v1/chains` | – |
-| `pools({ chain, class, window, minTvlUsd, limit, offset })` | `GET /v1/pools` | – |
+| `pools({ chain, class, window, minTvlUsd, limit, offset, sort, order })` | `GET /v1/pools` — `sort`: `netApr` (default) · `feeApr` · `ilApr` · `inRange` · `emissionApr` · `tvl` · `fee`; `order`: `desc` (default) · `asc`; the page carries `total` | – |
+| `iteratePools({ …, sort, order })` | every page, in that order (best effort: none twice; one whose place changes meanwhile may be missed) | – |
 | `pool(chain, address)` · `poolHours(chain, address, { hours })` | `GET /v1/pools/:chain/:address[/hours]` | – |
 | `backtest(chain, address, { rangePct, days })` | `GET …/backtest` | – |
 | `signals({ kind, limit, before })` · `signal(id)` | `GET /v1/signals[/:id]` | optional |
 | `signalStats({ days })` | `GET /v1/signals/stats` — the public track record | – |
 | `iterateSignals({ kind })` | every page, newest first | optional |
 | `signalsAfter(id)` | everything newer than `id`, oldest first | optional |
-| `smartLps({ windowDays, chain, limit })` | `GET /v1/smart-lps` | optional |
-| `walletPositions(owner)` | `GET /v1/smart-lps/:owner/positions` | Pro |
+| `smartLps({ windowDays, chain, limit, offset, sort, order })` | `GET /v1/smart-lps` — `sort`: `rank` (default, = pnl rank) · `pnl` · `return` · `capital` · `closes` · `wins`; `rank` stays the pnl rank whatever the sort; `total` | optional |
+| `iterateSmartLps({ …, sort, order })` | every wallet on the board, in that order | optional |
+| `walletPositions(owner, { limit, openOffset, openSort, openOrder, closedOffset, closedSort, closedOrder })` | `GET /v1/smart-lps/:owner/positions` — each list pages and sorts on its own (`openSort`: `lastEvent` · `openedAt` · `entryUsd`; `closedSort`: `closedAt` · `openedAt` · `capitalUsd` · `pnlUsd`); `openTotal` / `closedTotal` | Pro |
 | `follows()` · `follow(owner)` · `unfollow(owner)` | `/v1/me/follows` | Pro |
 | `me()` · `setWebhook(url)` · `deleteWebhook()` · `telegramLink()` | `/v1/me…` | yes |
 | `createApiKey({ replace })` | `POST /v1/me/api-key` — replaces the key (or `replace: false`: only if none), returned once | yes |

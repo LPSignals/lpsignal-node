@@ -54,6 +54,26 @@ await check('pools: ranked by net APR, bounded', async () => {
   top = page.pools[0] ?? null;
   return `${page.pools.length} pools${top ? `, top ${top.pair} ${(top.best.netApr * 100).toFixed(1)}%` : ''}`;
 });
+await check('pools: sorted by any column either way, offset pages, total', async () => {
+  const win = (await anon.pools({ limit: 1 })).total ? 168 : 24;
+  const asc = await anon.pools({ window: win, sort: 'tvl', order: 'asc', limit: 10 });
+  expect(typeof asc.total === 'number' && asc.sort === 'tvl' && asc.order === 'asc', `bad page meta ${JSON.stringify({ ...asc, pools: undefined })}`);
+  const tvls = asc.pools.map((p) => p.tvlUsd);
+  expect(tvls.every((v, i) => i === 0 || tvls[i - 1] <= v), 'tvl asc not sorted');
+  if (asc.total > 10) {
+    const next = await anon.pools({ window: win, sort: 'tvl', order: 'asc', limit: 10, offset: 10 });
+    expect(!next.pools.some((p) => asc.pools.some((q) => q.chain === p.chain && q.address === p.address)), 'pages overlap');
+    expect(next.pools.length === 0 || next.pools[0].tvlUsd >= tvls.at(-1), 'second page out of order');
+  }
+  // (metrics may update meanwhile: none twice, none beyond the total)
+  const ids = [];
+  for await (const p of anon.iteratePools({ window: win, limit: 100 })) ids.push(`${p.chain}:${p.address}`);
+  const n = ids.length;
+  expect(new Set(ids).size === n && n <= asc.total + 100, `iteratePools: ${n} pools, ${new Set(ids).size} distinct, total ${asc.total}`);
+  const bad = await anon.pools({ sort: 'owner' }).catch((x) => x);
+  expect(bad instanceof LPSignalError && bad.status === 400, 'unknown sort accepted');
+  return `${asc.total} pools, walked ${n}`;
+});
 await check('pool detail, hours, backtest', async () => {
   if (!top) return 'skip';
   const d = await anon.pool(top.chain, top.address);
@@ -105,8 +125,14 @@ await check('signal stats (public track record)', async () => {
 });
 await check('smart LP leaderboard', async () => {
   const lb = await reader.smartLps({ windowDays: 30 });
-  expect(Array.isArray(lb.wallets) && typeof lb.full === 'boolean', 'bad shape');
-  return `${lb.wallets.length} wallets, full=${lb.full}`;
+  expect(Array.isArray(lb.wallets) && typeof lb.full === 'boolean' && typeof lb.total === 'number', 'bad shape');
+  expect(lb.full || lb.total <= 10, 'non-Pro sees more than the top 10');
+  const ranks = lb.wallets.map((w) => w.rank);
+  expect(ranks.every((r, i) => i === 0 || ranks[i - 1] < r), 'default order is not by rank');
+  const byCap = await reader.smartLps({ windowDays: 30, sort: 'capital', limit: 10 });
+  const caps = byCap.wallets.map((w) => w.capitalUsd);
+  expect(caps.every((v, i) => i === 0 || caps[i - 1] >= v), 'capital desc not sorted');
+  return `${lb.total} wallets, full=${lb.full}`;
 });
 
 if (authed) {

@@ -61,7 +61,10 @@ export interface RankedPool {
   best: BestRange;
 }
 
-export interface PoolsPage { pools: RankedPool[]; limit: number; offset: number }
+export type Order = 'asc' | 'desc';
+/** what `pools` can sort by: the best range's figures, the pool's TVL or fee tier */
+export type PoolSort = 'netApr' | 'feeApr' | 'ilApr' | 'inRange' | 'emissionApr' | 'tvl' | 'fee';
+export interface PoolsPage { pools: RankedPool[]; limit: number; offset: number; total: number; sort: PoolSort; order: Order }
 
 export interface Pool {
   id: string;
@@ -267,7 +270,15 @@ export interface Leaderboard {
   /** false = top 10 with masked addresses (not Pro) */
   full: boolean;
   wallets: LeaderboardWallet[];
+  /** wallets on the board for this caller (non-Pro: at most 10) */
+  total: number;
+  limit: number;
+  offset: number;
+  sort: BoardSort;
+  order: Order;
 }
+/** what `smartLps` can sort by; `rank` (the pnl rank) stays the wallet's rank whatever the sort */
+export type BoardSort = 'rank' | 'pnl' | 'return' | 'capital' | 'closes' | 'wins';
 
 interface PositionPool { chain: Chain; pool: string; pair: string; dex: string; fee: number }
 
@@ -293,7 +304,18 @@ export interface ClosedPosition extends PositionPool {
   pnlUsd: number | null;
 }
 
-export interface WalletPositions { owner: string; open: OpenPosition[]; closed: ClosedPosition[] }
+export interface WalletPositions {
+  owner: string;
+  open: OpenPosition[];
+  closed: ClosedPosition[];
+  openTotal: number;
+  closedTotal: number;
+  limit: number;
+  openOffset: number;
+  closedOffset: number;
+}
+export type OpenSort = 'lastEvent' | 'openedAt' | 'entryUsd';
+export type ClosedSort = 'closedAt' | 'openedAt' | 'capitalUsd' | 'pnlUsd';
 
 export interface Me {
   id: string;
