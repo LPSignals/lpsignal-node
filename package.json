@@ -37,10 +37,10 @@
     "pancakeswap",
     "aerodrome"
   ],
-  "homepage": "https://github.com/Ligengxin96/lpsignal-sdk#readme",
+  "homepage": "https://github.com/LPSignals/lpsignal-sdk#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ligengxin96/lpsignal-sdk.git",
+    "url": "git+https://github.com/LPSignals/lpsignal-sdk.git",
     "directory": "node"
   },
   "license": "MIT",
