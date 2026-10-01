@@ -1,0 +1,37 @@
+name: release
+
+# Trusted publishing (OIDC): no npm token exists anywhere. npmjs.com trusts exactly this repository
+# (LPSignals/lpsignal-node) + this workflow file + the `release` environment.
+#
+#   git tag node-v0.8.0 && git push origin node-v0.8.0     (version must equal package.json)
+on:
+  push:
+    tags: ['node-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for npm trusted publishing (also signs the provenance statement)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - name: Tag matches package version
+        run: |
+          want="${GITHUB_REF_NAME#node-v}"
+          have="$(node -p "require('./package.json').version")"
+          [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME but package.json is $have"; exit 1; }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm publish --access public

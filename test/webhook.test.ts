@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { verifyWebhook, WebhookVerificationError } from '../src/index.js';
 
-const { vectors } = JSON.parse(readFileSync(new URL('../../testdata/webhook-vectors.json', import.meta.url), 'utf8')) as {
+const { vectors } = JSON.parse(readFileSync(new URL('../testdata/webhook-vectors.json', import.meta.url), 'utf8')) as {
   vectors: { secret: string; timestamp: string; body: string; signature: string }[];
 };
 

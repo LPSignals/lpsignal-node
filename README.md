@@ -3,6 +3,8 @@
 Official Node.js SDK for [LPSignal](https://lpsignal.app): net-of-IL APR signals for concentrated-liquidity pools.
 ESM, typed, Node ≥ 20. One runtime dependency (`ws`).
 
+[中文说明](README.zh.md) · Python SDK: [LPSignals/lpsignal-python](https://github.com/LPSignals/lpsignal-python) · [API docs](https://lpsignal.app/docs)
+
 ```bash
 npm install lpsignal
 ```
