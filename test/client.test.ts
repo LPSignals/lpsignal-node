@@ -33,6 +33,17 @@ describe('LPSignal client', () => {
     expect(calls[0]!.url.search).toBe('?kind=depeg');
   });
 
+  it('high-yield (hot_pool) signals: filterable and typed (narrowing on kind)', async () => {
+    const hot = { id: '9', kind: 'hot_pool', firedAt: '2026-10-01T00:00:00.000Z', poolApr24h: 2.27, poolApr7d: 0.6, bestNet24h: null, bestRangeBp: null, risk: 'high' };
+    const { f, calls } = fakeFetch(() => ({ body: { signals: [hot], next: null } }));
+    const page = await new LPSignal({ baseUrl: 'http://api.test', fetch: f }).signals({ kind: 'hot_pool' });
+    expect(calls[0]!.url.search).toBe('?kind=hot_pool');
+    const s = page.signals[0]!;
+    if (s.kind !== 'hot_pool') throw new Error('kind');
+    const apr: number = s.poolApr24h, best: number | null = s.bestNet24h;
+    expect([apr, best]).toEqual([2.27, null]);
+  });
+
   it('rejects a key that is not an LPSignal key', () => {
     expect(() => new LPSignal({ apiKey: 'sk_live_x' })).toThrow(/lps_/);
   });

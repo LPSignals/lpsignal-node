@@ -14,7 +14,7 @@ export type Chain = 'ethereum' | 'bsc' | 'base' | 'arbitrum' | 'optimism' | 'pol
 export type PairClass = 'stable' | 'correlated' | 'volatile';
 export type WindowHours = 1 | 24 | 168 | 720;
 export type Tier = 'free' | 'basic' | 'pro';
-export type SignalKind = 'net_apr' | 'burst' | 'tvl_outflow' | 'depeg' | 'smart_lp';
+export type SignalKind = 'net_apr' | 'burst' | 'hot_pool' | 'tvl_outflow' | 'depeg' | 'smart_lp';
 
 export interface Health { ok: boolean }
 
@@ -227,6 +227,25 @@ export interface BurstSignal extends SignalBase {
   stakedEmissionApr?: number;
 }
 
+/**
+ * High yield, high risk: a big pool (TVL $500k+) whose pool-level 24h fee APR — estimated 24h fees / TVL x 365, as DEX
+ * sites show it — reached 50%+ and at least twice its own 7-day average. A pool-level figure, not a recommended
+ * position (`tickLower`/`tickUpper` are 0), never scored (`outcome` stays null). Impermanent loss can exceed the fees:
+ * `bestNet24h` is what the best range netted over the same day (fees − IL; `bestRangeBp` says which), null without a
+ * 24h backtest. Pushed only to accounts subscribed to `hot_pool`.
+ */
+export interface HotPoolSignal extends SignalBase {
+  kind: 'hot_pool';
+  tvlUsd: number;
+  poolApr24h: number;
+  poolApr7d: number;
+  volume24hUsd: number;
+  fees24hUsd: number;
+  bestNet24h: number | null;
+  bestRangeBp: number | null;
+  risk: 'high';
+}
+
 /** Liquidity fell by `drop` within `windowHours`, valued at current prices. */
 export interface TvlOutflowSignal extends SignalBase {
   kind: 'tvl_outflow';
@@ -256,7 +275,7 @@ export interface SmartLpSignal extends SignalBase {
   wallet30d: { positions: number; pnlUsd: number; returnPct: number } | null;
 }
 
-export type Signal = NetAprSignal | BurstSignal | TvlOutflowSignal | DepegSignal | SmartLpSignal;
+export type Signal = NetAprSignal | BurstSignal | HotPoolSignal | TvlOutflowSignal | DepegSignal | SmartLpSignal;
 
 export interface SignalsPage {
   signals: Signal[];
@@ -353,7 +372,7 @@ export interface Me {
   hasApiKey: boolean;
   /**
    * kinds of global signal pushed to this account (Telegram, webhook, WebSocket without `kinds`): the core events
-   * net_apr, tvl_outflow, depeg, smart_lp by default; burst only when added. Custom-rule matches always arrive.
+   * net_apr, tvl_outflow, depeg, smart_lp by default; burst and hot_pool only when added. Custom-rule matches always arrive.
    */
   subscriptions: SignalKind[];
 }
