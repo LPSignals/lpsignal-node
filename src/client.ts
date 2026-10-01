@@ -100,7 +100,7 @@ export interface SignalsQuery {
   sort?: SignalSort;
   /** return / outcome only: desc (default) or asc */
   order?: Order;
-  /** return / outcome only */
+  /** numbered pages in any order (the page then carries `total`); not together with `before` */
   offset?: number;
 }
 
