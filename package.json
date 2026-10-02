@@ -1,7 +1,7 @@
 {
   "name": "lpsignal",
-  "version": "0.10.0",
-  "description": "Official LPSignal SDK: net-of-IL APR signals for concentrated-liquidity pools, a WebSocket stream that never misses a signal, webhook verification and the REST API, and adding / removing liquidity from your own wallet (lpsignal/liquidity).",
+  "version": "0.11.0",
+  "description": "Official LPSignal SDK: net-of-IL APR signals for concentrated-liquidity pools, a WebSocket stream that never misses a signal, webhook verification and the REST API, and adding / removing liquidity and swapping from your own wallet (lpsignal/liquidity).",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -55,6 +55,7 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.12",
     "typescript": "^5.6.0",
+    "undici": "^7.30.0",
     "viem": "^2.57.2",
     "vitest": "^3.2.0"
   },

@@ -10,17 +10,24 @@
  *
  * Never re-send a mint whose receipt you have not seen: a second one would add the same amounts again (sendPlan
  * throws TxPending with the hash instead of guessing).
+ *
+ * Swapping one pool token for the other (e.g. for the side you are short of) goes through the KyberSwap aggregator with
+ * LPSignal's fee (0.25%, 0.05% in stable pools, taken from the input) — planSwap checks every answer of the aggregator
+ * against the pool's own price and the calldata it builds, then sendPlan sends it like any other plan.
  */
 import { defineChain, type Address, type Hex, type PublicClient, type WalletClient } from 'viem';
+import { decodeFunctionData } from 'viem';
 import {
-  CHAIN_ID, COLLECT_ABI, ERC20, isSlipstream, NPM, NPM_READ, otherAmount, planMint, rangeTicks, removeAmounts, removeCall, SLOT0,
+  approvalsNeeded, CHAIN_ID, COLLECT_ABI, ERC20, isSlipstream, NPM, NPM_READ, otherAmount, planMint, rangeTicks, removeAmounts, removeCall, SLOT0, WRAPPED,
   type Call, type LpPool, type MintPlan, type Position,
 } from './core.js';
+import { buildSwap, checkSwapCall, fetchQuote, KYBER_ROUTER, KYBER_ROUTER_ABI, maxImpactBps, minOutFloor, requiredMinOut, spotOut, swapFeeBps, SwapRefused } from './swap.js';
 
 export * from './core.js';
+export * from './swap.js';
 
 /** a pool as the API returns it (`client.pool(chain, address).pool`) — only these fields are used */
-export interface PoolInfo { chain: string; address: string; dex: string; token0: string; token1: string; decimals0: number; decimals1: number; fee: number; tickSpacing: number }
+export interface PoolInfo { chain: string; address: string; dex: string; token0: string; token1: string; decimals0: number; decimals1: number; fee: number; tickSpacing: number; pairClass?: string }
 
 const MULTICALL3: Address = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -177,6 +184,83 @@ export async function planRemoveLiquidity(client: PublicClient, pos: WalletPosit
     ? { liquidity: 0n, amount0: 0n, amount1: 0n, amount0Min: 0n, amount1Min: 0n }
     : removeAmounts(sqrtPriceX96, live, o.shareBps, o.slippageBps ?? DEFAULT_SLIPPAGE_BPS);
   return { ...a, deadline, call: bind(removeCall(pos.chain, pos.dex, pos.tokenId, a, o.owner, BigInt(deadline)), pos.chain, o.owner) };
+}
+
+export interface SwapOptions {
+  /** the wallet that pays and receives */
+  owner: Address;
+  /** the pool token paid in (0 = token0, 1 = token1); the other one is bought */
+  fromSide: 0 | 1;
+  /** how much is paid in, raw units */
+  amountIn: bigint;
+  /** pay in / receive the chain's native coin instead of that side's wrapped token */
+  fromNative?: boolean; toNative?: boolean;
+  /** the price move tolerated (default 50 = 0.5%) */
+  slippageBps?: number;
+  /** the least the swap must deliver (e.g. the shortfall it is for): refused (SwapRefused 'moved') below it */
+  minOut?: bigint;
+  /** seconds until it expires (default 10 minutes): send the plan right away, quotes move */
+  deadlineS?: number;
+}
+export interface SwapPlan {
+  /** an exact approval of the aggregator's router, if the allowance is short (none for a native input) */
+  approvals: PlanCall[]; swap: PlanCall;
+  amountIn: bigint; quoteOut: bigint;
+  /** what the router guarantees to deliver or it reverts */
+  minReturn: bigint;
+  /** LPSignal's fee, bps of the input */
+  feeBps: number;
+  /** simulated from the owner before returning (not when an approval must land first) */
+  simulated: boolean; deadline: number;
+}
+
+/**
+ * A swap between the pool's two tokens through the KyberSwap aggregator, with LPSignal's fee. The aggregator's answers
+ * are checked, never trusted: the quote must be within the allowed impact of the pool's own price (SwapRefused
+ * 'impact'), and the calldata is decoded — router, swap() only, tokens, amount, value, recipient = owner, exactly our
+ * fee, flags, no permit, the split, and a minimum no lower than the pool-price floor, `minOut` and the quote less the
+ * slippage (SwapRefused 'calldata'); then simulated (SwapRefused 'simulation'). The router itself pays at least that
+ * minimum or reverts. Send it with sendPlan; a swap's deadline is in calldata nobody can check, so a send of unknown
+ * outcome must be resolved by its own transaction before swapping again (sendPlan blocks the account meanwhile).
+ */
+export async function planSwap(client: PublicClient, pool: PoolInfo, o: SwapOptions): Promise<SwapPlan> {
+  if (pool.dex === 'uniswap_v4') throw new Error('swapping is offered for v3-style pools (their price bounds the quote); not Uniswap v4');
+  await assertChain(client, pool.chain);
+  const pairClass = pool.pairClass ?? 'volatile';
+  const token = (side: 0 | 1) => (side === 0 ? pool.token0 : pool.token1).toLowerCase() as Address;
+  const toSide: 0 | 1 = o.fromSide === 0 ? 1 : 0;
+  for (const [side, native] of [[o.fromSide, o.fromNative], [toSide, o.toNative]] as const) {
+    if (native && token(side) !== WRAPPED[pool.chain]) throw new Error(`side ${side} is not the wrapped native token: it cannot be paid / received as the native coin`);
+  }
+  if (o.amountIn <= 0n) throw new Error('amountIn must be positive');
+  const slippageBps = o.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
+  // (10000 or more would take the minimum out to nothing: any price would do)
+  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= 10_000) throw new RangeError('slippageBps must be an integer from 0 to 9999');
+  if (o.minOut !== undefined && o.minOut < 0n) throw new RangeError('minOut must not be negative');
+  const from = { token: token(o.fromSide), native: !!o.fromNative }, to = { token: token(toSide), native: !!o.toNative };
+  const feeBps = swapFeeBps(pairClass), impactBps = maxImpactBps(pairClass);
+  const [[sqrtPriceX96], allowance] = await Promise.all([
+    client.readContract({ address: pool.address as Address, abi: SLOT0, functionName: 'slot0' }),
+    from.native ? Promise.resolve(0n) : client.readContract({ address: from.token, abi: ERC20, functionName: 'allowance', args: [o.owner, KYBER_ROUTER] }),
+  ]);
+  const approvals = from.native ? [] : approvalsNeeded(pool.chain, KYBER_ROUTER, [{ token: from.token, amount: o.amountIn, allowance }]);
+  const spot = spotOut(sqrtPriceX96, o.fromSide === 0, o.amountIn, feeBps);
+  const q = await fetchQuote(pool.chain, from, to, o.amountIn, feeBps);
+  if (q.amountOut < minOutFloor(spot, impactBps, 0)) throw new SwapRefused('impact', `quote ${q.amountOut} vs pool ${spot}`);
+  const need = o.minOut ?? 0n;
+  if ((q.amountOut * BigInt(10_000 - slippageBps)) / 10_000n < need) throw new SwapRefused('moved', `quote ${q.amountOut} for ${need}`);
+  const deadline = Math.floor(Date.now() / 1000) + (o.deadlineS ?? 10 * 60);
+  const c = await buildSwap(pool.chain, q, o.owner, slippageBps, deadline);
+  checkSwapCall(c, { from, to, amountIn: o.amountIn, account: o.owner, feeBps, minOut: requiredMinOut({ spot, impactBps, slippageBps, need, quoteOut: q.amountOut }) });
+  const simulated = approvals.length === 0;
+  if (simulated) {
+    try { await client.call({ account: o.owner, to: c.to, data: c.data, value: c.value }); } catch (e) { throw new SwapRefused('simulation', String((e as Error).message ?? e).slice(0, 200)); }
+  }
+  const minReturn = decodeFunctionData({ abi: KYBER_ROUTER_ABI, data: c.data }).args[0].desc.minReturnAmount;
+  return {
+    approvals: approvals.map((a) => bind(a, pool.chain, o.owner)), swap: bind(c, pool.chain, o.owner),
+    amountIn: o.amountIn, quoteOut: q.amountOut, minReturn, feeBps, simulated, deadline,
+  };
 }
 
 /** a transaction was sent but its receipt was not seen in time: it may still land — do not send it again blindly */

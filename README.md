@@ -158,6 +158,31 @@ await sendPlan(wallet, publicClient, [rest.call]);
 - Positions staked in an Aerodrome / Velodrome gauge belong to the gauge and are not listed by `positions`.
 - Not financial advice: a range that paid well can lose money if the price leaves it.
 
+## Swapping
+
+`planSwap` swaps one of a pool's tokens for the other (e.g. the side you are short of before adding) through the
+[KyberSwap](https://kyberswap.com) aggregator, with **LPSignal's fee: 0.25% of the input (0.05% in stable pools)**,
+sent by the aggregator's router to LPSignal's address. The aggregator's answers are checked, never trusted: the quote
+must be close to the pool's own on-chain price, and the transaction it builds is decoded — the router, the tokens and
+amount, the recipient (your own address), exactly LPSignal's fee and no other, no permit, and a guaranteed minimum out
+no lower than your slippage allows — then simulated. The router pays at least `minReturn` or the swap reverts.
+
+```js
+import { planSwap, sendPlan } from 'lpsignal/liquidity';
+// 0.1 ETH (paid as the native coin) for USDC in the WETH/USDC pool
+const swap = await planSwap(publicClient, pool, { owner: account.address, fromSide: 0, fromNative: true, amountIn: parseEther('0.1') });
+console.log(swap.quoteOut, swap.minReturn, swap.feeBps);
+await sendPlan(wallet, publicClient, [...swap.approvals, swap.swap]); // an exact approval if needed, then the swap
+```
+
+- `minOut`: the least the swap must deliver (e.g. what you are short of); refused (`SwapRefused` `moved`) if the quote
+  less the slippage no longer covers it. Other refusals: `impact` (the quote is too far under the pool price),
+  `quote` / `calldata` (the aggregator's answer did not match), `simulation` (it would revert now).
+- Send the plan right away (quotes move; it expires after `deadlineS`, default 10 minutes). A swap's deadline sits in
+  calldata nobody can check, so after a `TxUnknown` / `TxPending` find out what became of that very transaction before
+  swapping again (`sendPlan` blocks the account meanwhile).
+- Uniswap v4 pools are not supported. The aggregator refuses some addresses (e.g. well-known test keys).
+
 ## License
 
 MIT

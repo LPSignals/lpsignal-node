@@ -7,7 +7,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createPublicClient, createTestClient, createWalletClient, http, parseAbi, publicActions, walletActions, type Address, type PublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ERC20, planAddLiquidity, planRemoveLiquidity, positions, sendPlan, uncollectedFees, WRAPPED, type PoolInfo } from '../src/liquidity/index.js';
+import { ERC20, planAddLiquidity, planRemoveLiquidity, positions, sendPlan, TxUnknown, unblock, uncollectedFees, WRAPPED, type PoolInfo } from '../src/liquidity/index.js';
 
 const RUN = process.env.LP_FORK === '1';
 const FORK: Record<string, string> = {
@@ -82,5 +82,50 @@ describe.skipIf(!RUN)('lpsignal/liquidity on forks of the real position managers
     expect((await positions(pub, c.chain, me.address)).some((p) => p.tokenId === pos.tokenId)).toBe(false);
     // a position held by someone else is refused
     await expect(planRemoveLiquidity(pub, pos, { owner: '0x00000000000000000000000000000000000000aa', shareBps: 10_000 })).rejects.toThrow(/held by/);
+  }, 300_000);
+});
+
+describe.skipIf(!RUN)('planSwap on a fork through the real aggregator route (LPSignal fee)', () => {
+  it('Base WETH/USDC: native ETH in, then WETH in (approval + swap in one plan): at least the minimum arrives, our fee exactly', async () => {
+    // a proxy if the environment has one (local anvil bypasses it via no_proxy)
+    if (process.env.https_proxy) {
+      const { EnvHttpProxyAgent, setGlobalDispatcher } = await import('undici');
+      setGlobalDispatcher(new EnvHttpProxyAgent());
+    }
+    const { planSwap, SWAP_FEE_RECEIVER } = await import('../src/liquidity/index.js');
+    const { generatePrivateKey } = await import('viem/accounts');
+    const info = (await (await fetch('https://lpsignal.app/v1/pools/base/0x6c561b446416e1a00e8e93e221854d6ea4171372')).json() as { pool: PoolInfo }).pool;
+    const { test, pub } = await fork('base');
+    // a fresh account: the aggregator refuses anvil's well-known default ones
+    const owner = privateKeyToAccount(generatePrivateKey());
+    const wallet = createWalletClient({ account: owner, chain: pub.chain!, transport: http((pub.transport as { url: string }).url, { timeout: 60_000 }) });
+    await test.setBalance({ address: owner.address, value: 10n ** 21n });
+    const WETH9 = parseAbi(['function deposit() payable']);
+    await pub.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: info.token0 as Address, abi: WETH9, functionName: 'deposit', value: 10n ** 17n }) });
+    const feeBal = async (native: boolean) => (native ? pub.getBalance({ address: SWAP_FEE_RECEIVER }) : pub.readContract({ address: info.token0 as Address, abi: ERC20, functionName: 'balanceOf', args: [SWAP_FEE_RECEIVER] }));
+    for (const native of [true, false]) {
+      const amountIn = 10n ** 17n;
+      // re-planned on a failure: a fork freezes market makers' pools some routes go through
+      let done = false;
+      for (let attempt = 0; attempt < 4 && !done; attempt++) {
+        const plan = await planSwap(pub, info, { owner: owner.address, fromSide: 0, fromNative: native, amountIn });
+        expect(plan.approvals.length).toBe(native ? 0 : 1);
+        const [fee0, usdc0] = await Promise.all([feeBal(native), pub.readContract({ address: info.token1 as Address, abi: ERC20, functionName: 'balanceOf', args: [owner.address] })]);
+        try {
+          await sendPlan(wallet, pub, [...plan.approvals, plan.swap]);
+        } catch (e) {
+          // (TxReverted on a frozen pool: the account is not blocked by a revert — re-plan; a gas estimate that reverted
+          // is TxUnknown — certainly not sent here: unblock and re-plan, as a user would)
+          if (e instanceof TxUnknown && /revert/i.test(String((e as { cause?: unknown }).cause))) { unblock(8453, owner.address); continue; }
+          if (!String(e).includes('reverted')) throw e;
+          continue;
+        }
+        const [fee1, usdc1] = await Promise.all([feeBal(native), pub.readContract({ address: info.token1 as Address, abi: ERC20, functionName: 'balanceOf', args: [owner.address] })]);
+        expect(fee1 - fee0).toBe((amountIn * 25n) / 10_000n);
+        expect(usdc1 - usdc0 >= plan.minReturn).toBe(true);
+        done = true;
+      }
+      expect(done, native ? 'native' : 'weth').toBe(true);
+    }
   }, 300_000);
 });
