@@ -104,6 +104,60 @@ app.post('/lpsignal', express.raw({ type: 'application/json' }), (req, res) => {
 Pass the raw body (a `Buffer` or string), never re-serialised JSON. Deliveries older than 5 minutes are rejected
 (`toleranceSec`); every retry is signed afresh.
 
+## Adding and removing liquidity
+
+`lpsignal/liquidity` builds the transactions to add liquidity to a pool (in the range you choose) and to remove it,
+on the pools' official position managers — Uniswap v3, PancakeSwap v3, Aerodrome and Velodrome Slipstream. You sign
+and send them with your own [viem](https://viem.sh) wallet: your keys never reach the SDK, the position is always minted
+to and collected by your own address, and there is no LPSignal contract or fee in between. Uniswap v4 pools are not
+supported here (use the Uniswap app). Install viem next to the SDK: `npm i lpsignal viem`.
+
+```js
+import { LPSignal } from 'lpsignal';
+import { planAddLiquidity, planRemoveLiquidity, positions, sendPlan } from 'lpsignal/liquidity';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
+
+const account = privateKeyToAccount(process.env.PRIVATE_KEY);
+const publicClient = createPublicClient({ chain: base, transport: http() });
+const wallet = createWalletClient({ account, chain: base, transport: http() });
+
+// the pool's tokens, decimals, fee and tick spacing
+const { pool } = await new LPSignal().pool('base', '0x6c561b446416e1a00e8e93e221854d6ea4171372');
+// ±5% around the current price, 1 WETH in, paid in ETH; the USDC side is computed
+const plan = await planAddLiquidity(publicClient, pool, { owner: account.address, amount0: parseEther('1'), rangeBp: 500, nativeSide: 0 });
+await sendPlan(wallet, publicClient, [...plan.approvals, plan.mint]); // exact approvals, then the mint
+
+// later: your positions, then take half of one out (principal + fees, to you)
+const [pos] = (await positions(publicClient, 'base', account.address)).filter((p) => p.pool === pool.address);
+const half = await planRemoveLiquidity(publicClient, pos, { owner: account.address, shareBps: 5000 });
+// finalized: wait until that block is final before taking more from the same position (a reorg could otherwise drop
+// this removal while the next one reads the old liquidity, and both land)
+const [{ blockNumber }] = await sendPlan(wallet, publicClient, [half.call], { finalized: true });
+// the rest: read at a block no older than that removal
+const rest = await planRemoveLiquidity(publicClient, pos, { owner: account.address, shareBps: 10000, minBlock: blockNumber });
+await sendPlan(wallet, publicClient, [rest.call]);
+```
+
+- Minimum amounts follow the Uniswap SDK's rule for a price move of up to `slippageBps` (default 0.5%); transactions
+  expire after `deadlineS` (default 20 minutes).
+- Every planned call is bound to its chain and owner: `sendPlan` refuses to send it from another account or chain.
+- `sendPlan` waits for each receipt. If one is not seen in time it throws `TxPending` with the hash: **do not send the
+  same mint or partial removal again until you know what became of it** — a second one would also go through. A
+  transaction cancelled or replaced in the wallet throws `TxReplaced` and stops the plan (a speed-up is fine). A send
+  that fails without a hash throws `TxUnknown` with the account and the nonce it was sent with: check whether that nonce
+  was used first (with a nonce manager or a wallet that picks nonces itself, check its history). Plans of one account
+  are sent one after another within a process; do not send from the same account elsewhere at the same time. After a
+  `TxUnknown`, `TxPending` or `TxReplaced`, every further send from that account on that chain throws `AccountBlocked` until you have
+  checked the transaction and call `unblock(chainId, account)`.
+- Minimum amounts are what the position manager would take at the edges of the `slippage` band. With a range narrower
+  than that band (e.g. ±0.05% on a stable pair at 0.5% slippage) both minimums can be 0: the mint then has no on-chain
+  price bound, but a price pushed outside your range only makes the deposit single-sided (a mint never trades), and
+  coming back it converts at prices inside your range — the loss is bounded by the range's width.
+- Positions staked in an Aerodrome / Velodrome gauge belong to the gauge and are not listed by `positions`.
+- Not financial advice: a range that paid well can lose money if the price leaves it.
+
 ## License
 
 MIT

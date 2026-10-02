@@ -71,6 +71,23 @@ await lps.createRule({ kind: 'depeg', name: 'early depeg', minDeviation: 0.003 }
 await lps.setSubscriptions(['net_apr', 'burst', 'depeg']); // 推送哪些类型（规则命中总会推送）
 ```
 
+## 添加和移除流动性
+
+`lpsignal/liquidity` 负责构造交易：在你选的价格区间内添加流动性，以及移除流动性。交易发到池子的官方仓位合约（Uniswap v3、PancakeSwap v3、Aerodrome 和 Velodrome Slipstream）。签名和发送都用你自己的 [viem](https://viem.sh) 钱包：私钥不经过 SDK；仓位只会创建到你自己的地址，资金也只领回到你自己的地址；中间没有 LPSignal 的合约，也不收费。这里不支持 Uniswap v4 池子（请用 Uniswap 官方应用）。需要和 SDK 一起安装 viem：`npm i lpsignal viem`。
+
+用法见英文 README 的示例：`planAddLiquidity` → `sendPlan`，`positions` → `planRemoveLiquidity` → `sendPlan`。
+
+- 最低成交量按 Uniswap SDK 的规则计算，允许的价格变动由 `slippageBps` 指定（默认 0.5%）；交易在 `deadlineS` 之后失效（默认 20 分钟）。
+- `sendPlan` 会等每一笔的回执。如果规定时间内没等到，会抛出带交易哈希的 `TxPending`：**在弄清楚这笔交易的结果之前，不要重发同一笔创建仓位或部分移除的交易**，否则第二笔也会成交。
+- 每笔计划好的交易都绑定了所属的链和账户：从别的账户或别的链发送，`sendPlan` 会拒绝。在钱包里被取消或替换成别的交易时，会抛出 `TxReplaced` 并停止整个计划（只是加速则没关系）。
+- 发送时出错且拿不到交易哈希（节点可能已经收下了这笔交易）会抛出 `TxUnknown`，带上账户和 nonce：请先确认这个 nonce 有没有被用掉，再决定是否重发。
+- 出现 `TxUnknown`、`TxPending` 或 `TxReplaced` 后，这个账户在这条链上的后续发送都会抛出 `AccountBlocked`，直到你核实那笔交易后调用 `unblock(chainId, account)`。
+- 对同一个仓位做下一次部分移除前，给 `sendPlan` 传 `{ finalized: true }`，等那个区块最终确认后再继续，避免链重组导致多取。
+- 对同一个仓位做下一次移除时，把上一次 `sendPlan` 返回的区块号作为 `minBlock` 传入，这样 SDK 只会在不旧于那个区块的数据上计算，不会因为 RPC 节点落后而多取。
+- 最低成交量是价格在滑点范围两端时、仓位合约实际会收取的数量。如果区间比滑点范围还窄（例如稳定币池 ±0.05% 区间配 0.5% 滑点），两个最低值都可能是 0，这时交易在链上没有价格限制。但价格被推出你的区间时，添加只会变成存入单一代币（添加本身不做兑换）；价格回来时，转换只发生在你的区间内，所以损失上限是区间的宽度。
+- 质押在 Aerodrome / Velodrome gauge 里的仓位属于 gauge，`positions` 不会列出。
+- 不构成投资建议：过去收益好的区间，价格离开后也可能亏损。
+
 ## 开发
 
 ```bash
