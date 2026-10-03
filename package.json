@@ -41,7 +41,7 @@
     "pancakeswap",
     "aerodrome"
   ],
-  "homepage": "https://github.com/LPSignals/lpsignal-node#readme",
+  "homepage": "https://lpsignal.app/docs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LPSignals/lpsignal-node.git",
