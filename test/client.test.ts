@@ -126,11 +126,11 @@ describe('LPSignal client', () => {
     const { f, calls } = fakeFetch(() => ({ body: { id: '9', status: 'pending' } }));
     const c = new LPSignal({ apiKey: 'lps_k', baseUrl: 'http://api.test', fetch: f });
     await c.cryptoBilling();
-    await c.createCryptoOrder('pro', 12);
+    await c.createCryptoOrder('pro');
     await c.cryptoOrder('9');
     await c.cancelCryptoOrder('9');
     expect(calls.map((x) => `${x.method} ${x.url.pathname}`)).toEqual(['GET /v1/billing/crypto', 'POST /v1/billing/crypto/orders', 'GET /v1/billing/crypto/orders/9', 'POST /v1/billing/crypto/orders/9/cancel']);
-    expect(calls[1]!.body).toBe('{"tier":"pro","months":12}');
+    expect(calls[1]!.body).toBe('{"tier":"pro","months":1}');
   });
 
   it('billing refresh and checkout bodies', async () => {

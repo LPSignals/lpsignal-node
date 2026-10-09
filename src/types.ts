@@ -477,6 +477,7 @@ export interface WebhookEvent {
   signal: Signal;
 }
 
+/** new orders are one month; 3 and 12 appear only on orders placed before 2026-10-10 */
 export type CryptoMonths = 1 | 3 | 12;
 
 /** One prepaid plan period bought with a USDT/USDC deposit (GET/POST /v1/billing/crypto/orders…). */

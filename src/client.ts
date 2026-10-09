@@ -1,6 +1,6 @@
 import type {
   Backtest, BillingStatus, Chain, ChainStatus, Follow, Health, Leaderboard, Me, PairClass, PoolDetail, PoolHour,
-  PoolsPage, Rule, RuleInput, RulesPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoMonths, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
+  PoolsPage, Rule, RuleInput, RulesPage, Signal, SignalKind, SignalsPage, SignalStats, TelegramLink, CryptoBilling, CryptoOrder, WalletPositions, WebhookRegistration, WindowHours,
   BoardSort, ClosedSort, LeaderboardWallet, OpenSort, Order, PoolSort, RankedPool, SignalSort,
 } from './types.js';
 
@@ -340,8 +340,8 @@ export class LPSignal {
   cryptoBilling(): Promise<CryptoBilling> {
     return this.request('GET', '/v1/billing/crypto');
   }
-  /** Start (or get back the open) crypto order; send exactly `amount` before `expiresAt`. */
-  createCryptoOrder(tier: 'basic' | 'pro', months: CryptoMonths): Promise<CryptoOrder> {
+  /** Start (or get back the open) crypto order for one month (no renewal: order again to add time); send exactly `amount` before `expiresAt`. */
+  createCryptoOrder(tier: 'basic' | 'pro', months: 1 = 1): Promise<CryptoOrder> {
     return this.request('POST', '/v1/billing/crypto/orders', { body: { tier, months } });
   }
   cryptoOrder(id: string): Promise<CryptoOrder> {
