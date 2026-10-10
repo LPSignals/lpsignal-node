@@ -10,7 +10,7 @@
  */
 
 /** Chains scanned today. The API may add more, so any string is accepted. */
-export type Chain = 'ethereum' | 'bsc' | 'base' | 'arbitrum' | 'optimism' | 'polygon' | (string & {});
+export type Chain = 'ethereum' | 'bsc' | 'base' | 'arbitrum' | 'optimism' | 'polygon' | 'robinhood' | (string & {});
 export type PairClass = 'stable' | 'correlated' | 'volatile';
 export type WindowHours = 1 | 24 | 168 | 720;
 export type Tier = 'free' | 'basic' | 'pro';
