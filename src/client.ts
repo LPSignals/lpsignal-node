@@ -34,7 +34,7 @@ export interface LPSignalOptions {
   fetch?: typeof fetch;
 }
 
-type Query = Record<string, string | number | undefined>;
+type Query = Record<string, string | number | boolean | undefined>;
 
 export interface PoolsQuery {
   chain?: Chain;
@@ -45,6 +45,8 @@ export interface PoolsQuery {
   minTvlUsd?: number;
   /** only pools whose pool-level 24h APR (`poolApr24h`) is at least this (a fraction: 0.3 = 30%) */
   minPoolApr?: number;
+  /** true = only pools with a tokenized stock on one side (Robinhood Chain's stocks section) */
+  stock?: boolean;
   /** 1..100, default 50 */
   limit?: number;
   offset?: number;
